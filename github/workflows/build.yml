@@ -1,0 +1,43 @@
+name: Build MeteorMC
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make scripts executable
+        run: chmod +x ./gradlew ./CompileEPK.sh ./CompileJS.sh ./MakeOfflineDownload.sh
+
+      - name: Compile assets (EPK)
+        run: ./CompileEPK.sh
+
+      - name: Compile JavaScript (TeaVM)
+        run: ./CompileJS.sh
+
+      - name: Make offline download
+        run: ./MakeOfflineDownload.sh
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: MeteorMC-web
+          path: javascript/
+          if-no-files-found: error
