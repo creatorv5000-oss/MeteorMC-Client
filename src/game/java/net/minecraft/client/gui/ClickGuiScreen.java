@@ -838,6 +838,11 @@ final class MeteorModuleManager {
 		register(new Watermark());
 		register(new FpsDisplay());
 		register(new Clock());
+		register(new Coordinates());
+		register(new CpsCounter());
+		register(new Keystrokes());
+		register(new Zoom());
+		register(new NoRain());
 	}
 
 	private MeteorModuleManager() {
@@ -967,6 +972,146 @@ final class MeteorModuleManager {
 			}
 			String text = h + ":" + (min < 10 ? "0" : "") + min + suffix;
 			drawHudText(text, 4, 28, 0xFFFFD83A, shadow.getBoolean(), 1.0F);
+		}
+	}
+
+	/** Shows your block position and the direction you face. */
+	private static class Coordinates extends MeteorModule {
+		private static final String[] DIRS = { "S", "W", "N", "E" };
+		private final MeteorSetting shadow = addSetting(MeteorSetting.bool("Shadow", true));
+		private final MeteorSetting direction = addSetting(MeteorSetting.bool("Direction", true));
+
+		Coordinates() {
+			super("Coordinates", "Shows your XYZ position.", Category.HUD);
+		}
+
+		public void onRender() {
+			Minecraft m = mc();
+			if (m.player == null) {
+				return;
+			}
+			int x = (int) Math.floor(m.player.posX);
+			int y = (int) Math.floor(m.player.posY);
+			int z = (int) Math.floor(m.player.posZ);
+			String text = "XYZ: " + x + " / " + y + " / " + z;
+			if (direction.getBoolean()) {
+				int d = (int) Math.floor(m.player.rotationYaw * 4.0F / 360.0F + 0.5D) & 3;
+				text += "  " + DIRS[d];
+			}
+			drawHudText(text, 4, 40, 0xFFFFD83A, shadow.getBoolean(), 1.0F);
+		}
+	}
+
+	/** Clicks per second, counted from your attack / use button presses. */
+	private static class CpsCounter extends MeteorModule {
+		private final MeteorSetting shadow = addSetting(MeteorSetting.bool("Shadow", true));
+		private final MeteorSetting rightClick = addSetting(MeteorSetting.bool("Right Click", false));
+		private final List<Long> leftClicks = new ArrayList<Long>();
+		private final List<Long> rightClicks = new ArrayList<Long>();
+		private boolean lastLeft;
+		private boolean lastRight;
+
+		CpsCounter() {
+			super("CPS Counter", "Shows your clicks per second.", Category.HUD);
+		}
+
+		public void onRender() {
+			Minecraft m = mc();
+			long now = Minecraft.getSystemTime();
+
+			boolean left = m.gameSettings.keyBindAttack.isKeyDown();
+			if (left && !lastLeft) {
+				leftClicks.add(Long.valueOf(now));
+			}
+			lastLeft = left;
+
+			boolean right = m.gameSettings.keyBindUseItem.isKeyDown();
+			if (right && !lastRight) {
+				rightClicks.add(Long.valueOf(now));
+			}
+			lastRight = right;
+
+			while (!leftClicks.isEmpty() && now - leftClicks.get(0).longValue() > 1000L) {
+				leftClicks.remove(0);
+			}
+			while (!rightClicks.isEmpty() && now - rightClicks.get(0).longValue() > 1000L) {
+				rightClicks.remove(0);
+			}
+
+			String text = "CPS: " + leftClicks.size();
+			if (rightClick.getBoolean()) {
+				text += " | " + rightClicks.size();
+			}
+			drawHudText(text, 4, 52, 0xFFFFD83A, shadow.getBoolean(), 1.0F);
+		}
+	}
+
+	/** On-screen WASD and mouse button display. */
+	private static class Keystrokes extends MeteorModule {
+		private final MeteorSetting mouse = addSetting(MeteorSetting.bool("Mouse Buttons", true));
+
+		Keystrokes() {
+			super("Keystrokes", "Shows the keys you are pressing.", Category.HUD);
+		}
+
+		public void onRender() {
+			Minecraft m = mc();
+			int x = 4;
+			int y = 66;
+			drawKey(m.gameSettings.keyBindForward.isKeyDown(), "W", x + 20, y, 18, 18);
+			drawKey(m.gameSettings.keyBindLeft.isKeyDown(), "A", x, y + 20, 18, 18);
+			drawKey(m.gameSettings.keyBindBack.isKeyDown(), "S", x + 20, y + 20, 18, 18);
+			drawKey(m.gameSettings.keyBindRight.isKeyDown(), "D", x + 40, y + 20, 18, 18);
+			if (mouse.getBoolean()) {
+				drawKey(m.gameSettings.keyBindAttack.isKeyDown(), "LMB", x, y + 40, 29, 16);
+				drawKey(m.gameSettings.keyBindUseItem.isKeyDown(), "RMB", x + 31, y + 40, 27, 16);
+			}
+		}
+
+		private void drawKey(boolean down, String label, int x, int y, int w, int h) {
+			Gui.drawRect(x, y, x + w, y + h, down ? 0xD0FFC21F : 0x90000000);
+			Gui.drawRect(x, y, x + w, y + 1, down ? 0xFFFFE680 : 0x607A6422);
+			FontRenderer f = mc().fontRendererObj;
+			f.drawString(label, (float) (x + (w - f.getStringWidth(label)) / 2), (float) (y + (h - 8) / 2),
+					down ? 0xFF1A1208 : 0xFFF2EAD0, false);
+		}
+	}
+
+	/** Zooms in by lowering the field of view. Switch it on and off here. */
+	private static class Zoom extends MeteorModule {
+		private final MeteorSetting zoomFov = addSetting(MeteorSetting.number("Zoom FOV", 30.0D, 10.0D, 60.0D, 1.0D));
+		private float savedFov = 70.0F;
+
+		Zoom() {
+			super("Zoom", "Zooms in. Turn off to reset.", Category.VISUAL);
+		}
+
+		protected void onEnable() {
+			savedFov = mc().gameSettings.fovSetting;
+			mc().gameSettings.fovSetting = zoomFov.getFloat();
+		}
+
+		protected void onDisable() {
+			mc().gameSettings.fovSetting = savedFov;
+		}
+
+		public void onRender() {
+			mc().gameSettings.fovSetting = zoomFov.getFloat();
+		}
+	}
+
+	/** Hides rain and thunder on your screen (visual only). */
+	private static class NoRain extends MeteorModule {
+		NoRain() {
+			super("No Rain", "Hides rain and thunder visuals.", Category.VISUAL);
+		}
+
+		public void onRender() {
+			Minecraft m = mc();
+			if (m.world != null) {
+				m.world.setRainStrength(0.0F);
+				m.world.setThunderStrength(0.0F);
+			}
 		}
 	}
 }
