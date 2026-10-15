@@ -88,6 +88,33 @@ public class GuiMainMenu extends GuiScreen {
 	private int field_193978_M;
 	private int field_193979_N;
 
+	// ===================== METEORMC STYLE =====================
+	/** false = animated space background, true = original panorama. */
+	private static final boolean USE_PANORAMA = false;
+
+	private static final String TITLE = "MeteorMC";
+	private static final float TITLE_SCALE = 5.0F;
+
+	private static final int BG_TOP = 0xFF0B0A06;
+	private static final int BG_BOTTOM = 0xFF2E2208;
+
+	private static final int TITLE_COLOR_A = 0xFFFFB020;
+	private static final int TITLE_COLOR_B = 0xFFFFF8C0;
+	private static final int TITLE_AURA = 0xFF6A00;
+
+	private static final int METEOR_OUTER = 0xFFFF8A1A;
+	private static final int METEOR_CORE = 0xFFFFF4A0;
+	private static final int FLAME_HEAD = 0xE0FFB020;
+	private static final int FLAME_TAIL = 0x20A02000;
+
+	private static final int STAR_COUNT = 90;
+	private static final int METEOR_COUNT = 4;
+	// ==========================================================
+
+	private int[] starX;
+	private int[] starY;
+	private int[] starSize;
+
 	public GuiMainMenu() {
 		this.splashText = "missingno";
 		IResource iresource = null;
@@ -175,6 +202,7 @@ public class GuiMainMenu extends GuiScreen {
 			this.splashText = I18n.format("eaglercraft.splashes.halloween");
 		}
 
+		this.generateStars();
 		int i = 24;
 		int j = this.height / 4 + 48;
 
@@ -451,31 +479,21 @@ public class GuiMainMenu extends GuiScreen {
 	 */
 	public void drawScreen(int mouseX, int mouseY, float partialTicks) {
 		this.panoramaTimer += partialTicks;
-		GlStateManager.disableAlpha();
-		this.renderSkybox(mouseX, mouseY, partialTicks);
-		GlStateManager.enableAlpha();
-		int i = 274;
-		int j = this.width / 2 - 137;
-		int k = 30;
-		this.drawGradientRect(0, 0, this.width, this.height, -2130706433, 16777215);
-		this.drawGradientRect(0, 0, this.width, this.height, 0, Integer.MIN_VALUE);
-		this.mc.getTextureManager().bindTexture(MINECRAFT_TITLE_TEXTURES);
-		GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+		long now = Minecraft.getSystemTime();
 
-		if ((double) this.updateCounter < 1.0E-4D) {
-			this.drawTexturedModalRect(j + 0, 30, 0, 0, 99, 44);
-			this.drawTexturedModalRect(j + 99, 30, 129, 0, 27, 44);
-			this.drawTexturedModalRect(j + 99 + 26, 30, 126, 0, 3, 44);
-			this.drawTexturedModalRect(j + 99 + 26 + 3, 30, 99, 0, 26, 44);
-			this.drawTexturedModalRect(j + 155, 30, 0, 45, 155, 44);
+		if (USE_PANORAMA) {
+			GlStateManager.disableAlpha();
+			this.renderSkybox(mouseX, mouseY, partialTicks);
+			GlStateManager.enableAlpha();
+			this.drawGradientRect(0, 0, this.width, this.height, -2130706433, 16777215);
+			this.drawGradientRect(0, 0, this.width, this.height, 0, Integer.MIN_VALUE);
 		} else {
-			this.drawTexturedModalRect(j + 0, 30, 0, 0, 155, 44);
-			this.drawTexturedModalRect(j + 155, 30, 0, 45, 155, 44);
+			this.drawSpaceBackground(now);
 		}
 
-		this.mc.getTextureManager().bindTexture(field_194400_H);
-
-		drawModalRectWithCustomSizedTexture(j + 88, 67, 0.0F, 0.0F, 98, 14, 128.0F, 16.0F);
+		GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+		this.drawEmbers(now);
+		this.drawAnimatedTitle(now);
 
 		GlStateManager.pushMatrix();
 		GlStateManager.translate((float) (this.width / 2 + 90), 70.0F, 0.0F);
@@ -499,6 +517,139 @@ public class GuiMainMenu extends GuiScreen {
 				-1);
 
 		super.drawScreen(mouseX, mouseY, partialTicks);
+	}
+
+	private void generateStars() {
+		this.starX = new int[STAR_COUNT];
+		this.starY = new int[STAR_COUNT];
+		this.starSize = new int[STAR_COUNT];
+		long seed = 424242L;
+		int w = Math.max(1, this.width);
+		int h = Math.max(1, this.height);
+		for (int i = 0; i < STAR_COUNT; ++i) {
+			seed = seed * 6364136223846793005L + 1442695040888963407L;
+			this.starX[i] = (int) ((seed >>> 33) % w);
+			seed = seed * 6364136223846793005L + 1442695040888963407L;
+			this.starY[i] = (int) ((seed >>> 33) % h);
+			seed = seed * 6364136223846793005L + 1442695040888963407L;
+			this.starSize[i] = ((seed >>> 40) % 5L == 0L) ? 2 : 1;
+		}
+	}
+
+	/** Dark gradient, twinkling stars, and shooting meteors with flame trails. */
+	private void drawSpaceBackground(long now) {
+		this.drawGradientRect(0, 0, this.width, this.height, BG_TOP, BG_BOTTOM);
+
+		if (this.starX == null) {
+			this.generateStars();
+		}
+
+		for (int i = 0; i < STAR_COUNT; ++i) {
+			int a = (int) (90.0D + 110.0D * (0.5D + 0.5D * Math.sin(now * 0.003D + i * 1.7D)));
+			int sz = this.starSize[i];
+			Gui.drawRect(this.starX[i], this.starY[i], this.starX[i] + sz, this.starY[i] + sz,
+					(a << 24) | 0xFFF0C0);
+		}
+
+		for (int m = 0; m < METEOR_COUNT; ++m) {
+			float phase = ((now + m * 1900L) % 7600L) / 7600.0F;
+			float fade = Math.min(1.0F, Math.min(phase * 10.0F, (1.0F - phase) * 10.0F));
+			int sx = (int) (this.width * (0.45F + 0.55F * (((m * 53) % 100) / 100.0F)));
+			int hx = sx - (int) (phase * this.width * 0.75F);
+			int hy = -10 + (int) (phase * (this.height * 0.8F));
+
+			for (int i = 11; i >= 0; --i) {
+				int size = Math.max(1, 4 - i / 3);
+				int tx = hx + i * 4;
+				int ty = hy - i * 2;
+				int c = withAlpha(lerpColor(FLAME_HEAD, FLAME_TAIL, i / 11.0F), fade);
+				Gui.drawRect(tx, ty, tx + size, ty + size, c);
+			}
+			Gui.drawRect(hx - 2, hy - 2, hx + 3, hy + 3, withAlpha(METEOR_OUTER, fade));
+			Gui.drawRect(hx - 1, hy - 1, hx + 2, hy + 2, withAlpha(METEOR_CORE, fade));
+		}
+
+		this.drawGradientRect(0, 0, this.width, this.height, 0x00000000, 0xA0000000);
+	}
+
+	/** Small sparks rising around the title, fading as they go. */
+	private void drawEmbers(long now) {
+		int cx = this.width / 2;
+		for (int k = 0; k < 16; ++k) {
+			float life = ((now + k * 397L) % 2000L) / 2000.0F;
+			int x = cx - 120 + (k * 37) % 241 + (int) (Math.sin(life * 6.0F + k) * 4.0D);
+			int y = 82 - (int) (life * 60.0F);
+			int a = (int) ((1.0F - life) * 255.0F);
+			int size = (k % 3 == 0) ? 2 : 1;
+			int rgb = lerpColor(0xFFFFE680, 0xFFFF6A00, life) & 0xFFFFFF;
+			Gui.drawRect(x, y, x + size, y + size, (a << 24) | rgb);
+		}
+	}
+
+	/** Wavy, shimmering, glowing title with an underline streak. */
+	private void drawAnimatedTitle(long now) {
+		int cx = this.width / 2;
+		int total = this.fontRendererObj.getStringWidth(TITLE);
+		int len = TITLE.length();
+		float sweep = ((now % 2600L) / 2600.0F) * (len + 6) - 3.0F;
+
+		GlStateManager.pushMatrix();
+		GlStateManager.translate((float) cx, 30.0F, 0.0F);
+		GlStateManager.scale(TITLE_SCALE, TITLE_SCALE, 1.0F);
+		GlStateManager.enableBlend();
+		GlStateManager.tryBlendFuncSeparate(RealOpenGLEnums.GL_SRC_ALPHA, RealOpenGLEnums.GL_ONE_MINUS_SRC_ALPHA,
+				RealOpenGLEnums.GL_ONE, RealOpenGLEnums.GL_ZERO);
+
+		int x = -total / 2;
+		for (int i = 0; i < len; ++i) {
+			String s = String.valueOf(TITLE.charAt(i));
+			int cw = this.fontRendererObj.getStringWidth(s);
+
+			float bob = (float) Math.sin(now * 0.006D + i * 0.7D) * 0.8F;
+			float glow = Math.max(0.0F, 1.0F - Math.abs(i - sweep) / 2.5F);
+
+			int auraAlpha = (int) (50.0F + 90.0F * glow + 20.0F * (float) Math.sin(now * 0.01D + i));
+			auraAlpha = Math.max(8, Math.min(200, auraAlpha));
+			int auraColor = (auraAlpha << 24) | TITLE_AURA;
+			this.fontRendererObj.drawString(s, (float) x - 0.6F, bob, auraColor, false);
+			this.fontRendererObj.drawString(s, (float) x + 0.6F, bob, auraColor, false);
+			this.fontRendererObj.drawString(s, (float) x, bob - 0.6F, auraColor, false);
+			this.fontRendererObj.drawString(s, (float) x, bob + 0.6F, auraColor, false);
+
+			int rgb = lerpColor(TITLE_COLOR_A, TITLE_COLOR_B, glow) & 0xFFFFFF;
+			this.fontRendererObj.drawString(s, (float) x, bob, 0xFF000000 | rgb, true);
+
+			x += cw;
+		}
+
+		GlStateManager.popMatrix();
+
+		int lineW = (int) (total * TITLE_SCALE);
+		int lx0 = cx - lineW / 2;
+		int ly = 30 + (int) (9 * TITLE_SCALE) + 4;
+		Gui.drawRect(lx0, ly, lx0 + lineW, ly + 1, 0xFF7A6422);
+		int streakW = 40;
+		int pos = lx0 + (int) (((now % 1800L) / 1800.0F) * (lineW + streakW)) - streakW;
+		int s0 = Math.max(lx0, pos);
+		int s1 = Math.min(lx0 + lineW, pos + streakW);
+		if (s1 > s0) {
+			Gui.drawRect(s0, ly, s1, ly + 1, 0xFFFFE680);
+		}
+	}
+
+	private static int withAlpha(int color, float factor) {
+		int a = (int) (((color >>> 24) & 255) * factor);
+		return (a << 24) | (color & 0xFFFFFF);
+	}
+
+	private static int lerpColor(int a, int b, float t) {
+		int aa = (a >>> 24) & 255, ar = (a >>> 16) & 255, ag = (a >>> 8) & 255, ab = a & 255;
+		int ba = (b >>> 24) & 255, br = (b >>> 16) & 255, bg = (b >>> 8) & 255, bb = b & 255;
+		int ra = aa + (int) ((ba - aa) * t);
+		int rr = ar + (int) ((br - ar) * t);
+		int rg = ag + (int) ((bg - ag) * t);
+		int rb = ab + (int) ((bb - ab) * t);
+		return (ra << 24) | (rr << 16) | (rg << 8) | rb;
 	}
 
 	/**
