@@ -3,6 +3,7 @@ package com.isacofff.clientbase.modules;
 import com.isacofff.clientbase.modules.features.ClickGui;
 import com.isacofff.clientbase.modules.features.ExampleModule;
 import com.isacofff.clientbase.modules.features.FullBright;
+import com.isacofff.clientbase.modules.features.ViaVersion;
 import com.isacofff.clientbase.Category;
 
 import java.util.ArrayList;
