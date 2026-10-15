@@ -15,7 +15,7 @@ public class Manager {
     modules.add(new ClickGui());
     modules.add(new FullBright());
     modules.add(new ExampleModule());
-    modules.add{new ViaVersion());
+    modules.add(new ViaVersion());
     }
 
     public void onTick() {
