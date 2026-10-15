@@ -2,15 +2,13 @@ package net.minecraft.client.gui;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
 import net.lax1dude.eaglercraft.opengl.GlStateManager;
 import net.lax1dude.eaglercraft.opengl.RealOpenGLEnums;
-import net.meteormc.module.Module;
-import net.meteormc.module.ModuleManager;
-import net.meteormc.module.Setting;
 import net.minecraft.client.Minecraft;
 
 /**
@@ -69,13 +67,13 @@ public class ClickGuiScreen extends GuiScreen {
 	private static final int KEY_RSHIFT = 54;
 
 	private static class Panel {
-		final Module.Category category;
+		final MeteorModule.Category category;
 		int x;
 		int y;
 		boolean open = true;
-		final Set<Module> expanded = new HashSet<Module>();
+		final Set<MeteorModule> expanded = new HashSet<MeteorModule>();
 
-		Panel(Module.Category category, int x, int y) {
+		Panel(MeteorModule.Category category, int x, int y) {
 			this.category = category;
 			this.x = x;
 			this.y = y;
@@ -89,7 +87,7 @@ public class ClickGuiScreen extends GuiScreen {
 	private Panel draggingPanel;
 	private int dragOffX;
 	private int dragOffY;
-	private Setting draggingSetting;
+	private MeteorSetting draggingSetting;
 	private int sliderX;
 	private int sliderW;
 
@@ -109,8 +107,8 @@ public class ClickGuiScreen extends GuiScreen {
 		this.parent = parent;
 		if (PANELS.isEmpty()) {
 			int x = 20;
-			for (Module.Category c : Module.Category.values()) {
-				if (!ModuleManager.getModules(c).isEmpty()) {
+			for (MeteorModule.Category c : MeteorModule.Category.values()) {
+				if (!MeteorModuleManager.getModules(c).isEmpty()) {
 					PANELS.add(new Panel(c, x, PANEL_START_Y));
 					x += PANEL_WIDTH + 12;
 				}
@@ -137,7 +135,7 @@ public class ClickGuiScreen extends GuiScreen {
 		long now = Minecraft.getSystemTime();
 
 		this.drawSpaceBackground(now);
-		if (ModuleManager.menuEmbers()) {
+		if (MeteorModuleManager.menuEmbers()) {
 			this.drawEmbers(now);
 		}
 		this.drawAnimatedTitle(now);
@@ -164,7 +162,7 @@ public class ClickGuiScreen extends GuiScreen {
 	private int panelHeight(Panel p) {
 		int h = HEADER_HEIGHT;
 		if (p.open) {
-			for (Module m : ModuleManager.getModules(p.category)) {
+			for (MeteorModule m : MeteorModuleManager.getModules(p.category)) {
 				h += ROW_HEIGHT;
 				if (p.expanded.contains(m)) {
 					h += m.getSettings().size() * ROW_HEIGHT;
@@ -189,7 +187,7 @@ public class ClickGuiScreen extends GuiScreen {
 		}
 
 		int y = p.y + HEADER_HEIGHT;
-		for (Module m : ModuleManager.getModules(p.category)) {
+		for (MeteorModule m : MeteorModuleManager.getModules(p.category)) {
 			boolean hover = inside(mouseX, mouseY, p.x, y, PANEL_WIDTH, ROW_HEIGHT);
 
 			if (m.isEnabled()) {
@@ -216,7 +214,7 @@ public class ClickGuiScreen extends GuiScreen {
 			y += ROW_HEIGHT;
 
 			if (p.expanded.contains(m)) {
-				for (Setting s : m.getSettings()) {
+				for (MeteorSetting s : m.getSettings()) {
 					this.drawSetting(s, p.x, y);
 					y += ROW_HEIGHT;
 				}
@@ -224,10 +222,10 @@ public class ClickGuiScreen extends GuiScreen {
 		}
 	}
 
-	private void drawSetting(Setting s, int x, int y) {
+	private void drawSetting(MeteorSetting s, int x, int y) {
 		Gui.drawRect(x, y, x + PANEL_WIDTH, y + ROW_HEIGHT, SETTING_BG);
 
-		if (s.getType() == Setting.Type.BOOLEAN) {
+		if (s.getType() == MeteorSetting.Type.BOOLEAN) {
 			this.drawString(this.fontRendererObj, s.getName(), x + 10, y + 3, TEXT);
 			String state = s.getBoolean() ? "ON" : "OFF";
 			int w = this.fontRendererObj.getStringWidth(state);
@@ -269,7 +267,7 @@ public class ClickGuiScreen extends GuiScreen {
 			}
 
 			int y = p.y + HEADER_HEIGHT;
-			for (Module m : ModuleManager.getModules(p.category)) {
+			for (MeteorModule m : MeteorModuleManager.getModules(p.category)) {
 				if (inside(mouseX, mouseY, p.x, y, PANEL_WIDTH, ROW_HEIGHT)) {
 					if (button == 0) {
 						m.toggle();
@@ -283,10 +281,10 @@ public class ClickGuiScreen extends GuiScreen {
 				y += ROW_HEIGHT;
 
 				if (p.expanded.contains(m)) {
-					for (Setting s : m.getSettings()) {
+					for (MeteorSetting s : m.getSettings()) {
 						if (inside(mouseX, mouseY, p.x, y, PANEL_WIDTH, ROW_HEIGHT)) {
 							if (button == 0) {
-								if (s.getType() == Setting.Type.BOOLEAN) {
+								if (s.getType() == MeteorSetting.Type.BOOLEAN) {
 									s.toggle();
 								} else {
 									this.draggingSetting = s;
@@ -363,7 +361,7 @@ public class ClickGuiScreen extends GuiScreen {
 			this.generateStars();
 		}
 
-		if (ModuleManager.menuStars()) {
+		if (MeteorModuleManager.menuStars()) {
 			for (int i = 0; i < STAR_COUNT; ++i) {
 				int a = (int) (90.0D + 110.0D * (0.5D + 0.5D * Math.sin(now * 0.003D + i * 1.7D)));
 				int sz = this.starSize[i];
@@ -372,7 +370,7 @@ public class ClickGuiScreen extends GuiScreen {
 			}
 		}
 
-		if (ModuleManager.menuMeteors()) {
+		if (MeteorModuleManager.menuMeteors()) {
 			for (int m = 0; m < METEOR_COUNT; ++m) {
 				float phase = ((now + m * 1900L) % 7600L) / 7600.0F;
 				float fade = Math.min(1.0F, Math.min(phase * 10.0F, (1.0F - phase) * 10.0F));
@@ -481,5 +479,319 @@ public class ClickGuiScreen extends GuiScreen {
 		int rg = ag + (int) ((bg - ag) * t);
 		int rb = ab + (int) ((bb - ab) * t);
 		return (ra << 24) | (rr << 16) | (rg << 8) | rb;
+	}
+}
+
+/**
+ * Base class for every feature that can be toggled from the ClickGUI.
+ */
+abstract class MeteorModule {
+
+	public enum Category {
+		VISUAL("Visual"), HUD("HUD"), MISC("Misc");
+
+		private final String label;
+
+		Category(String label) {
+			this.label = label;
+		}
+
+		public String getLabel() {
+			return label;
+		}
+	}
+
+	private final String name;
+	private final String description;
+	private final Category category;
+	private boolean enabled;
+	private final List<MeteorSetting> settings = new ArrayList<MeteorSetting>();
+
+	protected MeteorModule(String name, String description, Category category) {
+		this.name = name;
+		this.description = description;
+		this.category = category;
+	}
+
+	protected Minecraft mc() {
+		return Minecraft.getMinecraft();
+	}
+
+	protected MeteorSetting addSetting(MeteorSetting setting) {
+		this.settings.add(setting);
+		return setting;
+	}
+
+	public void toggle() {
+		this.setEnabled(!this.enabled);
+	}
+
+	public void setEnabled(boolean enabled) {
+		if (this.enabled == enabled) {
+			return;
+		}
+		this.enabled = enabled;
+		if (enabled) {
+			this.onEnable();
+		} else {
+			this.onDisable();
+		}
+	}
+
+	/** Called once when the module is switched on. */
+	protected void onEnable() {
+	}
+
+	/** Called once when the module is switched off. */
+	protected void onDisable() {
+	}
+
+	/** Called every frame while enabled, from the in-game HUD render hook. */
+	public void onRender() {
+	}
+
+	public String getName() {
+		return name;
+	}
+
+	public String getDescription() {
+		return description;
+	}
+
+	public Category getCategory() {
+		return category;
+	}
+
+	public boolean isEnabled() {
+		return enabled;
+	}
+
+	public List<MeteorSetting> getSettings() {
+		return settings;
+	}
+}
+
+/**
+ * A single option on a module: either an on/off switch or a number slider.
+ */
+class MeteorSetting {
+
+	public enum Type {
+		BOOLEAN, NUMBER
+	}
+
+	private final String name;
+	private final Type type;
+	private boolean boolValue;
+	private double numberValue;
+	private double min;
+	private double max;
+	private double step;
+
+	private MeteorSetting(String name, Type type) {
+		this.name = name;
+		this.type = type;
+	}
+
+	public static MeteorSetting bool(String name, boolean defaultValue) {
+		MeteorSetting s = new MeteorSetting(name, Type.BOOLEAN);
+		s.boolValue = defaultValue;
+		return s;
+	}
+
+	public static MeteorSetting number(String name, double defaultValue, double min, double max, double step) {
+		MeteorSetting s = new MeteorSetting(name, Type.NUMBER);
+		s.min = min;
+		s.max = max;
+		s.step = step;
+		s.setValue(defaultValue);
+		return s;
+	}
+
+	public String getName() {
+		return name;
+	}
+
+	public Type getType() {
+		return type;
+	}
+
+	public boolean getBoolean() {
+		return boolValue;
+	}
+
+	public void toggle() {
+		this.boolValue = !this.boolValue;
+	}
+
+	public double getDouble() {
+		return numberValue;
+	}
+
+	public float getFloat() {
+		return (float) numberValue;
+	}
+
+	public double getMin() {
+		return min;
+	}
+
+	public double getMax() {
+		return max;
+	}
+
+	public void setValue(double value) {
+		if (step > 0.0D) {
+			value = Math.round((value - min) / step) * step + min;
+		}
+		this.numberValue = Math.max(min, Math.min(max, value));
+	}
+}
+
+/**
+ * Holds every module. To add a feature, write a MeteorModule subclass below and
+ * register it in the static block.
+ */
+final class MeteorModuleManager {
+
+	private static final List<MeteorModule> MODULES = new ArrayList<MeteorModule>();
+	private static final MenuEffects MENU_FX = new MenuEffects();
+
+	static {
+		register(MENU_FX);
+		MENU_FX.setEnabled(true);
+		register(new Watermark());
+		register(new FpsDisplay());
+		register(new Clock());
+	}
+
+	private MeteorModuleManager() {
+	}
+
+	private static void register(MeteorModule module) {
+		MODULES.add(module);
+	}
+
+	public static List<MeteorModule> getModules() {
+		return MODULES;
+	}
+
+	public static List<MeteorModule> getModules(MeteorModule.Category category) {
+		List<MeteorModule> out = new ArrayList<MeteorModule>();
+		for (MeteorModule m : MODULES) {
+			if (m.getCategory() == category) {
+				out.add(m);
+			}
+		}
+		return out;
+	}
+
+	/** Menu effect switches, read by the main menu and the ClickGUI. */
+	public static boolean menuStars() {
+		return MENU_FX.isEnabled() && MENU_FX.stars.getBoolean();
+	}
+
+	public static boolean menuMeteors() {
+		return MENU_FX.isEnabled() && MENU_FX.meteors.getBoolean();
+	}
+
+	public static boolean menuEmbers() {
+		return MENU_FX.isEnabled() && MENU_FX.embers.getBoolean();
+	}
+
+	/**
+	 * Call this once per frame from the in-game HUD (end of
+	 * GuiIngame.renderGameOverlay).
+	 */
+	public static void renderHud() {
+		for (MeteorModule m : MODULES) {
+			if (m.isEnabled()) {
+				m.onRender();
+			}
+		}
+	}
+
+	private static void drawHudText(String text, int x, int y, int color, boolean shadow, float scale) {
+		Minecraft mc = Minecraft.getMinecraft();
+		GlStateManager.pushMatrix();
+		GlStateManager.scale(scale, scale, 1.0F);
+		mc.fontRendererObj.drawString(text, (float) x / scale, (float) y / scale, color, shadow);
+		GlStateManager.popMatrix();
+	}
+
+	// ------------------------- Modules -------------------------
+
+	/** Stars, shooting meteors and embers on the menus. */
+	private static class MenuEffects extends MeteorModule {
+		final MeteorSetting stars = addSetting(MeteorSetting.bool("Stars", true));
+		final MeteorSetting meteors = addSetting(MeteorSetting.bool("Meteors", true));
+		final MeteorSetting embers = addSetting(MeteorSetting.bool("Embers", true));
+
+		MenuEffects() {
+			super("Menu Effects", "Stars, meteors and embers on menus.", Category.VISUAL);
+		}
+	}
+
+	/** Shows the client name in the corner. */
+	private static class Watermark extends MeteorModule {
+		private final MeteorSetting shadow = addSetting(MeteorSetting.bool("Shadow", true));
+
+		Watermark() {
+			super("Watermark", "Shows the client name.", Category.HUD);
+		}
+
+		public void onRender() {
+			drawHudText("MeteorMC", 4, 4, 0xFFFFB020, shadow.getBoolean(), 1.0F);
+		}
+	}
+
+	/** Shows frames per second in the corner. */
+	private static class FpsDisplay extends MeteorModule {
+		private final MeteorSetting shadow = addSetting(MeteorSetting.bool("Shadow", true));
+		private final MeteorSetting scale = addSetting(MeteorSetting.number("Scale", 1.0D, 0.5D, 2.0D, 0.25D));
+		private int frames;
+		private int fps;
+		private long last = Minecraft.getSystemTime();
+
+		FpsDisplay() {
+			super("FPS Display", "Shows your frame rate.", Category.HUD);
+		}
+
+		public void onRender() {
+			frames++;
+			long now = Minecraft.getSystemTime();
+			if (now - last >= 1000L) {
+				fps = frames;
+				frames = 0;
+				last = now;
+			}
+			drawHudText("FPS: " + fps, 4, 16, 0xFFFFD83A, shadow.getBoolean(), scale.getFloat());
+		}
+	}
+
+	/** Shows the current time. */
+	private static class Clock extends MeteorModule {
+		private final MeteorSetting shadow = addSetting(MeteorSetting.bool("Shadow", true));
+		private final MeteorSetting hour24 = addSetting(MeteorSetting.bool("24 Hour", false));
+
+		Clock() {
+			super("Clock", "Shows the current time.", Category.HUD);
+		}
+
+		public void onRender() {
+			Calendar c = Calendar.getInstance();
+			int h = c.get(Calendar.HOUR_OF_DAY);
+			int min = c.get(Calendar.MINUTE);
+			String suffix = "";
+			if (!hour24.getBoolean()) {
+				suffix = h >= 12 ? " PM" : " AM";
+				h = h % 12;
+				if (h == 0) {
+					h = 12;
+				}
+			}
+			String text = h + ":" + (min < 10 ? "0" : "") + min + suffix;
+			drawHudText(text, 4, 28, 0xFFFFD83A, shadow.getBoolean(), 1.0F);
+		}
 	}
 }
