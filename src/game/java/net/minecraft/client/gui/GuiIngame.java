@@ -342,6 +342,9 @@ public class GuiIngame extends Gui {
 			this.overlayPlayerList.renderPlayerlist(i, scoreboard, scoreobjective1);
 		}
 
+		// MeteorMC: draw the HUD modules (Watermark, FPS, Coordinates, ...)
+		MeteorModuleManager.renderHud();
+
 		GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
 		GlStateManager.disableLighting();
 		GlStateManager.enableAlpha();
