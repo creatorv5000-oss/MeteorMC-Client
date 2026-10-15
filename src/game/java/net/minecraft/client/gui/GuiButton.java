@@ -67,28 +67,60 @@ public class GuiButton extends Gui {
 		return i;
 	}
 
+	// ===================== BUTTON STYLE =====================
+	private static final int BORDER = 0xFF7A6422;
+	private static final int BORDER_HOVER = 0xFFFFC21F;
+	private static final int BORDER_DISABLED = 0xFF3A3322;
+
+	private static final int FILL_TOP = 0xFF2E260E;
+	private static final int FILL_BOTTOM = 0xFF1A150A;
+	private static final int FILL_HOVER_TOP = 0xFF5A4512;
+	private static final int FILL_HOVER_BOTTOM = 0xFF33270A;
+	private static final int FILL_DISABLED_TOP = 0xFF1C1A12;
+	private static final int FILL_DISABLED_BOTTOM = 0xFF14120C;
+
+	private static final int HIGHLIGHT = 0x40FFE680;
+
+	private static final int TEXT = 0xF2EAD0;
+	private static final int TEXT_HOVER = 0xFFD83A;
+	private static final int TEXT_DISABLED = 0x7A7458;
+	// ========================================================
+
 	public void func_191745_a(Minecraft p_191745_1_, int p_191745_2_, int p_191745_3_, float p_191745_4_) {
 		if (this.visible) {
 			FontRenderer fontrenderer = p_191745_1_.fontRendererObj;
-			p_191745_1_.getTextureManager().bindTexture(BUTTON_TEXTURES);
-			GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
 			this.hovered = p_191745_2_ >= this.xPosition && p_191745_3_ >= this.yPosition
 					&& p_191745_2_ < this.xPosition + this.width && p_191745_3_ < this.yPosition + this.height;
 			int i = this.getHoverState(this.hovered);
+
+			int x0 = this.xPosition;
+			int y0 = this.yPosition;
+			int x1 = x0 + this.width;
+			int y1 = y0 + this.height;
+
+			int border = i == 0 ? BORDER_DISABLED : (i == 2 ? BORDER_HOVER : BORDER);
+			int top = i == 0 ? FILL_DISABLED_TOP : (i == 2 ? FILL_HOVER_TOP : FILL_TOP);
+			int bottom = i == 0 ? FILL_DISABLED_BOTTOM : (i == 2 ? FILL_HOVER_BOTTOM : FILL_BOTTOM);
+
+			drawRect(x0, y0, x1, y1, border);
+			this.drawGradientRect(x0 + 1, y0 + 1, x1 - 1, y1 - 1, top, bottom);
+			if (i != 0) {
+				drawRect(x0 + 1, y0 + 1, x1 - 1, y0 + 2, HIGHLIGHT);
+			}
+
+			GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
 			GlStateManager.enableBlend();
 			GlStateManager.tryBlendFuncSeparate(RealOpenGLEnums.GL_SRC_ALPHA, RealOpenGLEnums.GL_ONE_MINUS_SRC_ALPHA,
 					RealOpenGLEnums.GL_ONE, RealOpenGLEnums.GL_ZERO);
 			GlStateManager.blendFunc(RealOpenGLEnums.GL_SRC_ALPHA, RealOpenGLEnums.GL_ONE_MINUS_SRC_ALPHA);
-			this.drawTexturedModalRect(this.xPosition, this.yPosition, 0, 46 + i * 20, this.width / 2, this.height);
-			this.drawTexturedModalRect(this.xPosition + this.width / 2, this.yPosition, 200 - this.width / 2,
-					46 + i * 20, this.width / 2, this.height);
 			this.mouseDragged(p_191745_1_, p_191745_2_, p_191745_3_);
-			int j = 14737632;
+
+			int j = TEXT;
 
 			if (!this.enabled) {
-				j = 10526880;
+				j = TEXT_DISABLED;
 			} else if (this.hovered) {
-				j = 16777120;
+				j = TEXT_HOVER;
 			}
 
 			this.drawCenteredString(fontrenderer, this.displayString, this.xPosition + this.width / 2,
