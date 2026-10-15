@@ -3,7 +3,6 @@ package com.isacofff.clientbase.modules;
 import com.isacofff.clientbase.modules.features.ClickGui;
 import com.isacofff.clientbase.modules.features.ExampleModule;
 import com.isacofff.clientbase.modules.features.FullBright;
-import com.isacofff.clientbase.modules.features.ViaVersion;
 import com.isacofff.clientbase.Category;
 
 import java.util.ArrayList;
@@ -16,7 +15,6 @@ public class Manager {
     modules.add(new ClickGui());
     modules.add(new FullBright());
     modules.add(new ExampleModule());
-    modules.add(new ViaVersion());
     }
 
     public void onTick() {
@@ -54,3 +52,4 @@ public class Manager {
         return list;
     }
 }
+ 
