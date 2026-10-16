@@ -215,6 +215,8 @@ public class GuiMainMenu extends GuiScreen {
 		this.buttonList.add(new GuiButton(0, this.width / 2 - 100, j + 72 + 12, 98, 20, I18n.format("menu.options")));
 		this.buttonList.add(new GuiButton(4, this.width / 2 + 2, j + 72 + 12, 98, 20, I18n.format("Edit Profile")));
 		this.buttonList.add(new GuiButtonLanguage(5, this.width / 2 - 124, j + 72 + 12));
+		this.buttonList.add(new GuiButton(20, this.width - 102, 4, 98, 20, "ClickGUI"));
+		this.buttonList.add(new GuiButton(21, this.width - 102, 26, 98, 20, "Credits"));
 	}
 
 	/**
@@ -282,6 +284,14 @@ public class GuiMainMenu extends GuiScreen {
 						"'" + worldinfo.getWorldName() + "' " + I18n.format("selectWorld.deleteWarning"),
 						I18n.format("selectWorld.deleteButton"), I18n.format("gui.cancel"), 12));
 			}
+		}
+
+		if (button.id == 20) {
+			this.mc.displayGuiScreen(new ClickGuiScreen(this));
+		}
+
+		if (button.id == 21) {
+			this.mc.displayGuiScreen(new GuiCredits(this));
 		}
 
 		if (button.id == 14) {
@@ -492,7 +502,9 @@ public class GuiMainMenu extends GuiScreen {
 		}
 
 		GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
-		this.drawEmbers(now);
+		if (MeteorModuleManager.menuEmbers()) {
+			this.drawEmbers(now);
+		}
 		this.drawAnimatedTitle(now);
 
 		GlStateManager.pushMatrix();
@@ -544,14 +556,14 @@ public class GuiMainMenu extends GuiScreen {
 			this.generateStars();
 		}
 
-		for (int i = 0; i < STAR_COUNT; ++i) {
+		for (int i = 0; MeteorModuleManager.menuStars() && i < STAR_COUNT; ++i) {
 			int a = (int) (90.0D + 110.0D * (0.5D + 0.5D * Math.sin(now * 0.003D + i * 1.7D)));
 			int sz = this.starSize[i];
 			Gui.drawRect(this.starX[i], this.starY[i], this.starX[i] + sz, this.starY[i] + sz,
 					(a << 24) | 0xFFF0C0);
 		}
 
-		for (int m = 0; m < METEOR_COUNT; ++m) {
+		for (int m = 0; MeteorModuleManager.menuMeteors() && m < METEOR_COUNT; ++m) {
 			float phase = ((now + m * 1900L) % 7600L) / 7600.0F;
 			float fade = Math.min(1.0F, Math.min(phase * 10.0F, (1.0F - phase) * 10.0F));
 			int sx = (int) (this.width * (0.45F + 0.55F * (((m * 53) % 100) / 100.0F)));
