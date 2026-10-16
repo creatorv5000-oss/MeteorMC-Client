@@ -35,7 +35,7 @@ public class ClickGuiScreen extends GuiScreen {
 	// ===================== STYLE =====================
 	private static final String TITLE = "MeteorMC";
 
-	private static final int WIN_W = 420;
+	private static final int WIN_W = 440;
 	private static final int WIN_H = 260;
 	private static final int HEADER = 28;
 	private static final int COLS = 3;
@@ -680,7 +680,7 @@ public class ClickGuiScreen extends GuiScreen {
 abstract class MeteorModule {
 
 	public enum Category {
-		VISUAL("Visual"), HUD("HUD"), COMBAT("Combat"), MOVEMENT("Movement"), MISC("Misc");
+		VISUAL("Visual"), HUD("HUD"), COMBAT("Combat"), MOVEMENT("Movement"), PERFORMANCE("FPS"), MISC("Misc");
 
 		private final String label;
 
@@ -853,10 +853,22 @@ final class MeteorModuleManager {
 	private static final MenuEffects MENU_FX = new MenuEffects();
 	private static final int HUD_COLOR = 0xFFFFD83A;
 	private static int hudY = 4;
+	private static FpsBoost fpsBoost;
+	private static boolean boostStarted;
+	private static boolean bulk;
 
 	static {
 		register(MENU_FX);
 		MENU_FX.setEnabled(true);
+
+		// FPS
+		MeteorModule[] tweaks = { new FastGraphics(), new NoClouds(), new MinimalParticles(), new NoShadows(),
+				new FlatLighting() };
+		fpsBoost = new FpsBoost(tweaks);
+		register(fpsBoost);
+		for (MeteorModule t : tweaks) {
+			register(t);
+		}
 
 		// HUD
 		registerOn(new Watermark());
@@ -950,6 +962,13 @@ final class MeteorModuleManager {
 	 */
 	public static void renderHud() {
 		hudY = 4;
+		if (!boostStarted) {
+			boostStarted = true;
+			try {
+				fpsBoost.setEnabled(true);
+			} catch (Throwable t) {
+			}
+		}
 		GlStateManager.enableBlend();
 		GlStateManager.enableAlpha();
 		GlStateManager.tryBlendFuncSeparate(RealOpenGLEnums.GL_SRC_ALPHA, RealOpenGLEnums.GL_ONE_MINUS_SRC_ALPHA,
@@ -994,6 +1013,14 @@ final class MeteorModuleManager {
 		return String.valueOf(Math.round(v * 10.0D) / 10.0D);
 	}
 
+	/** Rebuilds the chunk meshes so graphics changes take effect. */
+	private static void reloadChunks() {
+		Minecraft m = Minecraft.getMinecraft();
+		if (!bulk && m != null && m.world != null && m.renderGlobal != null) {
+			m.renderGlobal.loadRenderers();
+		}
+	}
+
 	private static boolean blink() {
 		return (Minecraft.getSystemTime() / 350L) % 2L == 0L;
 	}
@@ -1020,6 +1047,204 @@ final class MeteorModuleManager {
 			if (t != null) {
 				hudLine(t, color(m), shadow.getBoolean());
 			}
+		}
+	}
+
+
+	// ------------------------- FPS -------------------------
+
+	/**
+	 * Master FPS switch. Turns on every tweak below, lowers the render distance and
+	 * (optionally) keeps adjusting it to chase your target FPS. It cannot go above
+	 * what your device and display can do.
+	 */
+	private static class FpsBoost extends MeteorModule {
+		private final MeteorSetting target = addSetting(MeteorSetting.number("Target FPS", 60.0D, 30.0D, 100.0D, 5.0D));
+		private final MeteorSetting maxDist = addSetting(MeteorSetting.number("Max Distance", 6.0D, 2.0D, 12.0D, 1.0D));
+		private final MeteorSetting auto = addSetting(MeteorSetting.bool("Auto Adjust", true));
+		private final MeteorModule[] tweaks;
+		private int savedDistance = 8;
+		private int dist = 6;
+		private int frames;
+		private int fpsSum;
+		private int samples;
+		private long lastSecond;
+		private long lastAdjust;
+		private long lastLower;
+		private long warmupUntil;
+
+		FpsBoost(MeteorModule[] tweaks) {
+			super("FPS Boost", "Lowers detail to raise your frame rate.", Category.PERFORMANCE);
+			this.tweaks = tweaks;
+		}
+
+		protected void onEnable() {
+			bulk = true;
+			for (MeteorModule t : tweaks) {
+				t.setEnabled(true);
+			}
+			bulk = false;
+			savedDistance = mc().gameSettings.renderDistanceChunks;
+			dist = (int) maxDist.getDouble();
+			mc().gameSettings.renderDistanceChunks = dist;
+			frames = 0;
+			fpsSum = 0;
+			samples = 0;
+			lastSecond = Minecraft.getSystemTime();
+			lastAdjust = lastSecond;
+			warmupUntil = lastSecond + 4000L;
+			reloadChunks();
+		}
+
+		protected void onDisable() {
+			bulk = true;
+			for (MeteorModule t : tweaks) {
+				t.setEnabled(false);
+			}
+			bulk = false;
+			mc().gameSettings.renderDistanceChunks = savedDistance;
+			reloadChunks();
+		}
+
+		private void applyDistance() {
+			mc().gameSettings.renderDistanceChunks = dist;
+			reloadChunks();
+			warmupUntil = Minecraft.getSystemTime() + 4000L;
+			fpsSum = 0;
+			samples = 0;
+		}
+
+		public void onRender() {
+			long now = Minecraft.getSystemTime();
+			frames++;
+			if (now - lastSecond >= 1000L) {
+				if (now >= warmupUntil) {
+					fpsSum += frames;
+					samples++;
+				}
+				frames = 0;
+				lastSecond = now;
+			}
+
+			int cap = (int) maxDist.getDouble();
+			if (!auto.getBoolean()) {
+				if (dist != cap) {
+					dist = cap;
+					applyDistance();
+				}
+			} else if (dist > cap) {
+				dist = cap;
+				applyDistance();
+			}
+
+			if (auto.getBoolean() && now - lastAdjust >= 5000L && samples > 0) {
+				int avg = fpsSum / samples;
+				fpsSum = 0;
+				samples = 0;
+				lastAdjust = now;
+				if (avg < target.getDouble() && dist > 2) {
+					dist--;
+					lastLower = now;
+					applyDistance();
+				} else if (avg > target.getDouble() + 40.0D && dist < cap && now - lastLower >= 30000L) {
+					dist++;
+					applyDistance();
+				}
+			}
+		}
+	}
+
+	/** Fast (non-fancy) graphics: simpler leaves and blocks. */
+	private static class FastGraphics extends MeteorModule {
+		private boolean saved = true;
+
+		FastGraphics() {
+			super("Fast Graphics", "Simpler leaves and blocks.", Category.PERFORMANCE);
+		}
+
+		protected void onEnable() {
+			saved = mc().gameSettings.fancyGraphics;
+			mc().gameSettings.fancyGraphics = false;
+			reloadChunks();
+		}
+
+		protected void onDisable() {
+			mc().gameSettings.fancyGraphics = saved;
+			reloadChunks();
+		}
+	}
+
+	/** Hides clouds. */
+	private static class NoClouds extends MeteorModule {
+		private int saved = 2;
+
+		NoClouds() {
+			super("No Clouds", "Hides the clouds.", Category.PERFORMANCE);
+		}
+
+		protected void onEnable() {
+			saved = mc().gameSettings.clouds;
+			mc().gameSettings.clouds = 0;
+		}
+
+		protected void onDisable() {
+			mc().gameSettings.clouds = saved;
+		}
+	}
+
+	/** Minimal particles. */
+	private static class MinimalParticles extends MeteorModule {
+		private int saved = 0;
+
+		MinimalParticles() {
+			super("Minimal Particles", "Shows far fewer particles.", Category.PERFORMANCE);
+		}
+
+		protected void onEnable() {
+			saved = mc().gameSettings.particleSetting;
+			mc().gameSettings.particleSetting = 2;
+		}
+
+		protected void onDisable() {
+			mc().gameSettings.particleSetting = saved;
+		}
+	}
+
+	/** Turns off the shadows under mobs and players. */
+	private static class NoShadows extends MeteorModule {
+		private boolean saved = true;
+
+		NoShadows() {
+			super("No Entity Shadows", "Removes shadows under entities.", Category.PERFORMANCE);
+		}
+
+		protected void onEnable() {
+			saved = mc().gameSettings.entityShadows;
+			mc().gameSettings.entityShadows = false;
+		}
+
+		protected void onDisable() {
+			mc().gameSettings.entityShadows = saved;
+		}
+	}
+
+	/** Turns off smooth lighting. */
+	private static class FlatLighting extends MeteorModule {
+		private int saved = 1;
+
+		FlatLighting() {
+			super("Flat Lighting", "Turns off smooth lighting.", Category.PERFORMANCE);
+		}
+
+		protected void onEnable() {
+			saved = mc().gameSettings.ambientOcclusion;
+			mc().gameSettings.ambientOcclusion = 0;
+			reloadChunks();
+		}
+
+		protected void onDisable() {
+			mc().gameSettings.ambientOcclusion = saved;
+			reloadChunks();
 		}
 	}
 
