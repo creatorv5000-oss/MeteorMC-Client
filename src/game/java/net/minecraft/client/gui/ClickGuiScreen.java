@@ -22,12 +22,13 @@ import net.minecraft.potion.PotionEffect;
 import net.minecraft.util.StringUtils;
 
 /**
- * MeteorMC ClickGUI: one centered window with category tabs, a search box and
- * a grid of module cards with toggle switches.
+ * MeteorMC ClickGUI: sidebar of categories, a page title with a search box, and
+ * a grid of module cards (gear icon for settings, ON/OFF badge to toggle).
  *
- * Click a card: toggle the module.
- * Right click a card (or click its ".." corner): open its settings.
- * Type to search. Drag the scrollbar or use the Up / Down arrow keys to scroll.
+ * Click a card (or its badge): toggle the module.
+ * Click the gear (or right click a card): open its settings.
+ * Sidebar: pick a category, or open the Settings page.
+ * Type to search. Up / Down arrows or the scrollbar scroll the grid.
  * Esc: back / clear search / close.
  */
 public class ClickGuiScreen extends GuiScreen {
@@ -35,13 +36,14 @@ public class ClickGuiScreen extends GuiScreen {
 	// ===================== STYLE =====================
 	private static final String TITLE = "MeteorMC";
 
-	private static final int WIN_W = 440;
-	private static final int WIN_H = 260;
-	private static final int HEADER = 28;
+	private static final int WIN_W = 480;
+	private static final int WIN_H = 270;
+	private static final int SB_W = 104;
+	private static final int ROW_H = 16;
 	private static final int COLS = 3;
 	private static final int GAP = 6;
-	private static final int CARD_H = 44;
-	private static final int SEARCH_W = 80;
+	private static final int CARD_H = 46;
+	private static final int SEARCH_W = 90;
 
 	private static final int BG_TOP = 0xFF0B0A06;
 	private static final int BG_BOTTOM = 0xFF2E2208;
@@ -69,6 +71,9 @@ public class ClickGuiScreen extends GuiScreen {
 
 	private static final int STAR_COUNT = 90;
 	private static final int METEOR_COUNT = 4;
+
+	private static final String[] GEAR = { "#..##..#", ".######.", "..#..#..", "###..###", "###..###", "..#..#..",
+			".######.", "#..##..#" };
 	// =================================================
 
 	private static final int KEY_ESCAPE = 1;
@@ -76,9 +81,14 @@ public class ClickGuiScreen extends GuiScreen {
 	private static final int KEY_UP = 200;
 	private static final int KEY_DOWN = 208;
 
+	/** Options on the Settings page. */
+	private static final MeteorSetting TOOLTIPS = MeteorSetting.bool("Tooltips", true);
+	private static final MeteorSetting HEADER_GLOW = MeteorSetting.bool("Header Glow", true);
+
 	/** Remembered between openings. */
 	private static int selectedTab = 0;
 	private static int scrollRow = 0;
+	private static boolean settingsPage = false;
 	private static final Map<Object, Float> ANIM = new HashMap<Object, Float>();
 
 	private final GuiScreen parent;
@@ -137,24 +147,28 @@ public class ClickGuiScreen extends GuiScreen {
 		this.winY = (this.height - this.winH) / 2;
 	}
 
-	private int contentX() {
-		return this.winX + 10;
+	private int mainX() {
+		return this.winX + SB_W + 10;
+	}
+
+	private int mainW() {
+		return this.winW - SB_W - 20;
 	}
 
 	private int contentY() {
-		return this.winY + HEADER + 8;
-	}
-
-	private int contentW() {
-		return this.winW - 28;
+		return this.winY + 38;
 	}
 
 	private int contentH() {
-		return this.winH - HEADER - 16;
+		return this.winH - 38 - 10;
+	}
+
+	private int gridW() {
+		return this.mainW() - 8;
 	}
 
 	private int cardW() {
-		return (this.contentW() - GAP * (COLS - 1)) / COLS;
+		return (this.gridW() - GAP * (COLS - 1)) / COLS;
 	}
 
 	private int visibleRows() {
@@ -162,23 +176,33 @@ public class ClickGuiScreen extends GuiScreen {
 	}
 
 	private int searchX() {
-		return this.winX + this.winW - 26 - SEARCH_W;
+		return this.winX + this.winW - 10 - SEARCH_W;
+	}
+
+	private int sbRowY(int i) {
+		return this.winY + 40 + i * ROW_H;
+	}
+
+	private int settingsRowY() {
+		return this.sbRowY(this.tabs.size() + 1) + 10;
+	}
+
+	private boolean inDone(int mx, int my) {
+		return inside(mx, my, this.winX + 8, this.winY + this.winH - 26, SB_W - 16, 18);
 	}
 
 	private String tabLabel(int i) {
 		return i == 0 ? "All" : this.tabs.get(i - 1).getLabel();
 	}
 
-	private int tabX(int i) {
-		int x = this.winX + 92;
-		for (int k = 0; k < i; ++k) {
-			x += this.fontRendererObj.getStringWidth(this.tabLabel(k)) + 10;
+	private String pageTitle() {
+		if (this.settingsModule != null) {
+			return this.settingsModule.getName();
 		}
-		return x;
-	}
-
-	private int tabW(int i) {
-		return this.fontRendererObj.getStringWidth(this.tabLabel(i)) + 10;
+		if (settingsPage) {
+			return "Settings";
+		}
+		return selectedTab == 0 ? "All Mods" : this.tabLabel(selectedTab);
 	}
 
 	private List<MeteorModule> filtered() {
@@ -196,8 +220,25 @@ public class ClickGuiScreen extends GuiScreen {
 		return out;
 	}
 
+	private List<MeteorSetting> settingsPageList() {
+		List<MeteorSetting> list = new ArrayList<MeteorSetting>(MeteorModuleManager.menuEffectSettings());
+		list.add(TOOLTIPS);
+		list.add(HEADER_GLOW);
+		return list;
+	}
+
 	private static int rowHeight(MeteorSetting s) {
-		return s.getType() == MeteorSetting.Type.BOOLEAN ? 22 : 30;
+		return s.getType() == MeteorSetting.Type.BOOLEAN ? 24 : 32;
+	}
+
+	private String fit(String s, int maxW) {
+		if (this.fontRendererObj.getStringWidth(s) <= maxW) {
+			return s;
+		}
+		while (s.length() > 1 && this.fontRendererObj.getStringWidth(s + "..") > maxW) {
+			s = s.substring(0, s.length() - 1);
+		}
+		return s + "..";
 	}
 
 	// ------------------------- Drawing -------------------------
@@ -212,7 +253,7 @@ public class ClickGuiScreen extends GuiScreen {
 
 		super.drawScreen(mouseX, mouseY, partialTicks);
 
-		if (this.tooltip != null) {
+		if (this.tooltip != null && TOOLTIPS.getBoolean()) {
 			int tw = this.fontRendererObj.getStringWidth(this.tooltip);
 			int tx = Math.min(this.tooltipX + 8, this.width - tw - 8);
 			int ty = this.tooltipY + 10;
@@ -227,48 +268,66 @@ public class ClickGuiScreen extends GuiScreen {
 		this.drawGradientRect(this.winX, this.winY, this.winX + this.winW, this.winY + this.winH, 0xF0181309,
 				0xF00E0B05);
 
+		// Sidebar
+		Gui.drawRect(this.winX, this.winY, this.winX + SB_W, this.winY + this.winH, 0x70000000);
+		Gui.drawRect(this.winX + SB_W, this.winY, this.winX + SB_W + 1, this.winY + this.winH, CARD_BORDER);
 		this.drawHeaderTitle(now);
+		Gui.drawRect(this.winX + 8, this.winY + 32, this.winX + SB_W - 8, this.winY + 33, CARD_BORDER);
 
-		// Tabs
 		for (int i = 0; i <= this.tabs.size(); ++i) {
-			int tx = this.tabX(i);
-			int tw = this.tabW(i);
-			boolean sel = i == selectedTab;
-			boolean hover = inside(mouseX, mouseY, tx, this.winY + 4, tw, HEADER - 6);
-			this.drawCenteredString(this.fontRendererObj, this.tabLabel(i), tx + tw / 2, this.winY + 10,
-					sel ? GOLD : (hover ? TEXT : TEXT_DIM));
-			if (sel) {
-				Gui.drawRect(tx + 3, this.winY + HEADER - 3, tx + tw - 3, this.winY + HEADER - 1, GOLD);
-			}
+			this.drawSidebarRow(this.tabLabel(i), this.sbRowY(i), !settingsPage && i == selectedTab, mouseX, mouseY);
 		}
+		int sepY = this.sbRowY(this.tabs.size() + 1) + 4;
+		Gui.drawRect(this.winX + 8, sepY, this.winX + SB_W - 8, sepY + 1, CARD_BORDER);
+		this.drawSidebarRow("Settings", this.settingsRowY(), settingsPage, mouseX, mouseY);
 
-		// Search box
+		boolean doneHover = this.inDone(mouseX, mouseY);
+		int dx = this.winX + 8;
+		int dy = this.winY + this.winH - 26;
+		Gui.drawRect(dx, dy, dx + SB_W - 16, dy + 18, doneHover ? BORDER_HOVER : BORDER);
+		this.drawGradientRect(dx + 1, dy + 1, dx + SB_W - 17, dy + 17, doneHover ? CARD_HOVER_TOP : CARD_TOP,
+				doneHover ? CARD_HOVER_BOTTOM : CARD_BOTTOM);
+		this.drawCenteredString(this.fontRendererObj, "Done", dx + (SB_W - 16) / 2, dy + 5, doneHover ? GOLD : TEXT);
+
+		// Main header: page title + search box
+		GlStateManager.pushMatrix();
+		GlStateManager.translate((float) this.mainX(), (float) (this.winY + 10), 0.0F);
+		GlStateManager.scale(1.3F, 1.3F, 1.0F);
+		this.fontRendererObj.drawString(this.fit(this.pageTitle(), 120), 0.0F, 0.0F, TEXT, true);
+		GlStateManager.popMatrix();
+
 		int sx = this.searchX();
-		int sy = this.winY + 7;
+		int sy = this.winY + 8;
 		boolean sHover = inside(mouseX, mouseY, sx, sy, SEARCH_W, 14);
 		Gui.drawRect(sx, sy, sx + SEARCH_W, sy + 14, (sHover || !this.search.isEmpty()) ? BORDER_HOVER : BORDER);
 		Gui.drawRect(sx + 1, sy + 1, sx + SEARCH_W - 1, sy + 13, 0xFF14110A);
 		if (this.search.isEmpty()) {
-			this.drawString(this.fontRendererObj, "Search Mods", sx + 5, sy + 3, TEXT_DIM);
+			this.drawString(this.fontRendererObj, "Search", sx + 5, sy + 3, TEXT_DIM);
 		} else {
 			String caret = ((now / 500L) % 2L == 0L) ? "_" : "";
 			this.drawString(this.fontRendererObj, this.search + caret, sx + 5, sy + 3, TEXT);
 		}
+		Gui.drawRect(this.mainX() - 2, this.winY + 32, this.winX + this.winW - 8, this.winY + 33, CARD_BORDER);
 
-		// Close button
-		int cx = this.winX + this.winW - 18;
-		boolean cHover = inside(mouseX, mouseY, cx, this.winY + 6, 12, 14);
-		this.drawCenteredString(this.fontRendererObj, "x", cx + 6, this.winY + 9, cHover ? GOLD : TEXT_DIM);
-
-		// Divider
-		Gui.drawRect(this.winX + 8, this.winY + HEADER, this.winX + this.winW - 8, this.winY + HEADER + 1,
-				CARD_BORDER);
-
-		if (this.settingsModule != null) {
-			this.drawSettingsView(mouseX, mouseY);
+		if (settingsPage) {
+			this.drawSettingRows(this.settingsPageList(), this.mainX(), this.contentY(), this.mainW(), mouseX, mouseY);
+		} else if (this.settingsModule != null) {
+			this.drawModuleSettings(mouseX, mouseY);
 		} else {
 			this.drawGrid(mouseX, mouseY);
 		}
+	}
+
+	private void drawSidebarRow(String label, int y, boolean selected, int mouseX, int mouseY) {
+		boolean hover = inside(mouseX, mouseY, this.winX + 4, y, SB_W - 8, ROW_H);
+		if (selected) {
+			Gui.drawRect(this.winX + 4, y, this.winX + SB_W - 4, y + ROW_H, 0x40FFC21F);
+			Gui.drawRect(this.winX + 4, y, this.winX + 6, y + ROW_H, GOLD);
+		} else if (hover) {
+			Gui.drawRect(this.winX + 4, y, this.winX + SB_W - 4, y + ROW_H, 0x20FFFFFF);
+		}
+		this.drawString(this.fontRendererObj, label, this.winX + 14, y + 4,
+				selected ? GOLD : (hover ? TEXT : TEXT_DIM));
 	}
 
 	private void drawGrid(int mouseX, int mouseY) {
@@ -279,7 +338,7 @@ public class ClickGuiScreen extends GuiScreen {
 		scrollRow = Math.max(0, Math.min(maxScroll, scrollRow));
 
 		if (list.isEmpty()) {
-			this.drawCenteredString(this.fontRendererObj, "No modules found", this.winX + this.winW / 2,
+			this.drawCenteredString(this.fontRendererObj, "No modules found", this.mainX() + this.mainW() / 2,
 					this.winY + this.winH / 2, TEXT_DIM);
 		}
 
@@ -289,13 +348,12 @@ public class ClickGuiScreen extends GuiScreen {
 		for (int i = start; i < end; ++i) {
 			int r = i / COLS - scrollRow;
 			int c = i % COLS;
-			int x = this.contentX() + c * (cw + GAP);
+			int x = this.mainX() + c * (cw + GAP);
 			int y = this.contentY() + r * (CARD_H + GAP);
 			this.drawCard(list.get(i), x, y, cw, mouseX, mouseY);
 		}
 
-		// Scrollbar
-		int sx = this.contentX() + this.contentW() + 4;
+		int sx = this.mainX() + this.gridW() + 2;
 		int sy = this.contentY();
 		int sh = this.contentH();
 		Gui.drawRect(sx, sy, sx + 4, sy + sh, 0xFF1A150A);
@@ -308,18 +366,19 @@ public class ClickGuiScreen extends GuiScreen {
 
 	private void drawCard(MeteorModule m, int x, int y, int cw, int mouseX, int mouseY) {
 		boolean hover = inside(mouseX, mouseY, x, y, cw, CARD_H);
-		int border = hover ? BORDER_HOVER : (m.isEnabled() ? BORDER : CARD_BORDER);
+		boolean on = m.isEnabled();
+		int border = on ? BORDER_HOVER : (hover ? BORDER : CARD_BORDER);
 		Gui.drawRect(x, y, x + cw, y + CARD_H, border);
 		this.drawGradientRect(x + 1, y + 1, x + cw - 1, y + CARD_H - 1, hover ? CARD_HOVER_TOP : CARD_TOP,
 				hover ? CARD_HOVER_BOTTOM : CARD_BOTTOM);
 
-		this.drawCenteredString(this.fontRendererObj, m.getName(), x + cw / 2, y + 9, m.isEnabled() ? GOLD : TEXT);
-		this.drawSwitch(m, m.isEnabled(), x + cw / 2 - 12, y + 25);
+		this.drawString(this.fontRendererObj, this.fit(m.getName(), cw - 14), x + 7, y + 7, on ? TEXT : 0xFFC8C0A8);
 
-		if (!m.getSettings().isEmpty()) {
-			boolean cornerHover = inside(mouseX, mouseY, x + cw - 18, y + 2, 16, 10);
-			this.drawString(this.fontRendererObj, "..", x + cw - 12, y + 3, cornerHover ? GOLD : TEXT_DIM);
-		}
+		boolean hasSettings = !m.getSettings().isEmpty();
+		boolean gearHover = hasSettings && inside(mouseX, mouseY, x + 5, y + CARD_H - 16, 12, 12);
+		this.drawGear(x + 7, y + CARD_H - 14, hasSettings ? (gearHover ? GOLD : TEXT_DIM) : 0xFF4A4432);
+		this.drawBadge(m, on, x + cw - 31, y + CARD_H - 16);
+
 		if (hover) {
 			this.tooltip = m.getDescription();
 			this.tooltipX = mouseX;
@@ -327,52 +386,26 @@ public class ClickGuiScreen extends GuiScreen {
 		}
 	}
 
-	private void drawSettingsView(int mouseX, int mouseY) {
-		int x = this.contentX();
-		int y = this.contentY();
-		int w = this.contentW() + 8;
-
-		boolean hb = inside(mouseX, mouseY, x, y, 44, 14);
-		Gui.drawRect(x, y, x + 44, y + 14, hb ? BORDER_HOVER : BORDER);
-		this.drawGradientRect(x + 1, y + 1, x + 43, y + 13, hb ? CARD_HOVER_TOP : CARD_TOP,
-				hb ? CARD_HOVER_BOTTOM : CARD_BOTTOM);
-		this.drawCenteredString(this.fontRendererObj, "< Back", x + 22, y + 3, hb ? GOLD : TEXT);
-		this.drawString(this.fontRendererObj, this.settingsModule.getName(), x + 54, y + 3, GOLD);
-
-		int ry = y + 22;
-		for (MeteorSetting s : this.settingsModule.getSettings()) {
-			int rh = rowHeight(s);
-			Gui.drawRect(x, ry, x + w, ry + rh, CARD_BORDER);
-			this.drawGradientRect(x + 1, ry + 1, x + w - 1, ry + rh - 1, CARD_TOP, CARD_BOTTOM);
-
-			if (s.getType() == MeteorSetting.Type.BOOLEAN) {
-				this.drawString(this.fontRendererObj, s.getName(), x + 8, ry + 7, TEXT);
-				this.drawSwitch(s, s.getBoolean(), x + w - 32, ry + 6);
-			} else {
-				this.drawString(this.fontRendererObj, s.getName() + ": " + fmt(s.getDouble()), x + 8, ry + 5, TEXT);
-				int tx0 = x + 8;
-				int tw = w - 16;
-				double t = (s.getDouble() - s.getMin()) / (s.getMax() - s.getMin());
-				int fx = tx0 + (int) (tw * t);
-				Gui.drawRect(tx0, ry + rh - 10, tx0 + tw, ry + rh - 7, 0xFF2A220C);
-				Gui.drawRect(tx0, ry + rh - 10, fx, ry + rh - 7, GOLD);
-				Gui.drawRect(fx - 1, ry + rh - 12, fx + 2, ry + rh - 5, 0xFFFFFFFF);
+	private void drawGear(int px, int py, int color) {
+		for (int r = 0; r < GEAR.length; ++r) {
+			for (int c = 0; c < GEAR[r].length(); ++c) {
+				if (GEAR[r].charAt(c) == '#') {
+					Gui.drawRect(px + c, py + r, px + c + 1, py + r + 1, color);
+				}
 			}
-			ry += rh + GAP;
 		}
 	}
 
-	/** Animated pill switch. */
-	private void drawSwitch(Object key, boolean on, int x, int y) {
+	/** Animated ON / OFF badge. */
+	private void drawBadge(Object key, boolean on, int bx, int by) {
 		float t = this.anim(key, on);
-		int w = 24;
-		int h = 10;
-		int track = lerpColor(0xFF3A3322, 0xFFFFC21F, t);
-		Gui.drawRect(x + 1, y, x + w - 1, y + h, track);
-		Gui.drawRect(x, y + 1, x + w, y + h - 1, track);
-		int kx = x + 1 + (int) ((w - h) * t);
-		int knob = lerpColor(0xFF9A9070, 0xFFFFFFFF, t);
-		Gui.drawRect(kx, y + 1, kx + h - 2, y + h - 1, knob);
+		int bg = lerpColor(0xFF1E190C, 0xFFFFB020, t);
+		int bd = lerpColor(0xFF3A3322, 0xFFFFC21F, t);
+		Gui.drawRect(bx, by, bx + 26, by + 11, bd);
+		Gui.drawRect(bx + 1, by + 1, bx + 25, by + 10, bg);
+		String s = on ? "ON" : "OFF";
+		int tw = this.fontRendererObj.getStringWidth(s);
+		this.drawString(this.fontRendererObj, s, bx + (26 - tw) / 2, by + 2, on ? 0xFF2A1800 : TEXT_DIM);
 	}
 
 	private float anim(Object key, boolean on) {
@@ -384,20 +417,65 @@ public class ClickGuiScreen extends GuiScreen {
 		return cur;
 	}
 
-	/** Small animated glowing title in the window header. */
+	private void drawModuleSettings(int mouseX, int mouseY) {
+		int x = this.mainX();
+		int y = this.contentY();
+
+		boolean hb = inside(mouseX, mouseY, x, y, 44, 14);
+		Gui.drawRect(x, y, x + 44, y + 14, hb ? BORDER_HOVER : BORDER);
+		this.drawGradientRect(x + 1, y + 1, x + 43, y + 13, hb ? CARD_HOVER_TOP : CARD_TOP,
+				hb ? CARD_HOVER_BOTTOM : CARD_BOTTOM);
+		this.drawCenteredString(this.fontRendererObj, "< Back", x + 22, y + 3, hb ? GOLD : TEXT);
+		this.drawString(this.fontRendererObj, this.settingsModule.getDescription(), x + 54, y + 3, TEXT_DIM);
+
+		this.drawSettingRows(this.settingsModule.getSettings(), x, y + 22, this.mainW(), mouseX, mouseY);
+	}
+
+	private void drawSettingRows(List<MeteorSetting> list, int x, int y, int w, int mouseX, int mouseY) {
+		int ry = y;
+		for (MeteorSetting s : list) {
+			int rh = rowHeight(s);
+			boolean hover = inside(mouseX, mouseY, x, ry, w, rh);
+			Gui.drawRect(x, ry, x + w, ry + rh, hover ? BORDER : CARD_BORDER);
+			this.drawGradientRect(x + 1, ry + 1, x + w - 1, ry + rh - 1, hover ? CARD_HOVER_TOP : CARD_TOP,
+					hover ? CARD_HOVER_BOTTOM : CARD_BOTTOM);
+
+			if (s.getType() == MeteorSetting.Type.BOOLEAN) {
+				this.drawString(this.fontRendererObj, s.getName(), x + 8, ry + (rh - 8) / 2, TEXT);
+				this.drawBadge(s, s.getBoolean(), x + w - 34, ry + (rh - 11) / 2);
+			} else {
+				this.drawString(this.fontRendererObj, s.getName() + ": " + fmt(s.getDouble()), x + 8, ry + 5, TEXT);
+				int tx0 = x + 8;
+				int tw = w - 16;
+				double t = (s.getDouble() - s.getMin()) / (s.getMax() - s.getMin());
+				int fx = tx0 + (int) (tw * t);
+				Gui.drawRect(tx0, ry + rh - 11, tx0 + tw, ry + rh - 8, 0xFF2A220C);
+				Gui.drawRect(tx0, ry + rh - 11, fx, ry + rh - 8, GOLD);
+				Gui.drawRect(fx - 1, ry + rh - 13, fx + 2, ry + rh - 6, 0xFFFFFFFF);
+			}
+			ry += rh + GAP;
+		}
+	}
+
+	/** Small animated glowing title at the top of the sidebar. */
 	private void drawHeaderTitle(long now) {
-		int total = this.fontRendererObj.getStringWidth(TITLE);
+		float scale = 1.5F;
 		int len = TITLE.length();
-		float sweep = ((now % 2600L) / 2600.0F) * (len + 6) - 3.0F;
-		float scale = 1.4F;
 
 		GlStateManager.pushMatrix();
-		GlStateManager.translate((float) (this.winX + 10), (float) (this.winY + 8), 0.0F);
+		GlStateManager.translate((float) (this.winX + 10), (float) (this.winY + 10), 0.0F);
 		GlStateManager.scale(scale, scale, 1.0F);
 		GlStateManager.enableBlend();
 		GlStateManager.tryBlendFuncSeparate(RealOpenGLEnums.GL_SRC_ALPHA, RealOpenGLEnums.GL_ONE_MINUS_SRC_ALPHA,
 				RealOpenGLEnums.GL_ONE, RealOpenGLEnums.GL_ZERO);
 
+		if (!HEADER_GLOW.getBoolean()) {
+			this.fontRendererObj.drawString(TITLE, 0.0F, 0.0F, GOLD, true);
+			GlStateManager.popMatrix();
+			return;
+		}
+
+		float sweep = ((now % 2600L) / 2600.0F) * (len + 6) - 3.0F;
 		int x = 0;
 		for (int i = 0; i < len; ++i) {
 			String s = String.valueOf(TITLE.charAt(i));
@@ -429,26 +507,45 @@ public class ClickGuiScreen extends GuiScreen {
 			return;
 		}
 
-		// Close button
-		if (button == 0 && inside(mouseX, mouseY, this.winX + this.winW - 18, this.winY + 6, 12, 14)) {
-			this.mc.displayGuiScreen(this.parent);
-			return;
-		}
-
-		// Tabs
+		// Sidebar
 		if (button == 0) {
 			for (int i = 0; i <= this.tabs.size(); ++i) {
-				if (inside(mouseX, mouseY, this.tabX(i), this.winY + 4, this.tabW(i), HEADER - 6)) {
+				if (inside(mouseX, mouseY, this.winX + 4, this.sbRowY(i), SB_W - 8, ROW_H)) {
 					selectedTab = i;
 					scrollRow = 0;
+					settingsPage = false;
 					this.settingsModule = null;
 					return;
 				}
 			}
+			if (inside(mouseX, mouseY, this.winX + 4, this.settingsRowY(), SB_W - 8, ROW_H)) {
+				settingsPage = true;
+				this.settingsModule = null;
+				return;
+			}
+			if (this.inDone(mouseX, mouseY)) {
+				this.mc.displayGuiScreen(this.parent);
+				return;
+			}
+		}
+
+		if (settingsPage) {
+			if (button == 0) {
+				this.clickSettingRows(this.settingsPageList(), this.mainX(), this.contentY(), this.mainW(), mouseX,
+						mouseY);
+			}
+			return;
 		}
 
 		if (this.settingsModule != null) {
-			this.clickSettings(mouseX, mouseY, button);
+			if (button == 0) {
+				if (inside(mouseX, mouseY, this.mainX(), this.contentY(), 44, 14)) {
+					this.settingsModule = null;
+				} else {
+					this.clickSettingRows(this.settingsModule.getSettings(), this.mainX(), this.contentY() + 22,
+							this.mainW(), mouseX, mouseY);
+				}
+			}
 			return;
 		}
 
@@ -458,7 +555,7 @@ public class ClickGuiScreen extends GuiScreen {
 
 		// Scrollbar
 		if (button == 0 && rows > vis
-				&& inside(mouseX, mouseY, this.contentX() + this.contentW() + 2, this.contentY(), 8, this.contentH())) {
+				&& inside(mouseX, mouseY, this.mainX() + this.gridW(), this.contentY(), 10, this.contentH())) {
 			this.draggingScroll = true;
 			this.updateScroll(mouseY);
 			return;
@@ -471,40 +568,28 @@ public class ClickGuiScreen extends GuiScreen {
 		for (int i = start; i < end; ++i) {
 			int r = i / COLS - scrollRow;
 			int c = i % COLS;
-			int x = this.contentX() + c * (cw + GAP);
+			int x = this.mainX() + c * (cw + GAP);
 			int y = this.contentY() + r * (CARD_H + GAP);
 			if (inside(mouseX, mouseY, x, y, cw, CARD_H)) {
 				MeteorModule m = list.get(i);
 				boolean hasSettings = !m.getSettings().isEmpty();
-				if (button == 1 && hasSettings) {
-					this.settingsModule = m;
-				} else if (button == 0) {
-					if (hasSettings && inside(mouseX, mouseY, x + cw - 18, y + 2, 16, 10)) {
+				if (button == 1) {
+					if (hasSettings) {
 						this.settingsModule = m;
-					} else {
-						m.toggle();
 					}
+				} else if (hasSettings && inside(mouseX, mouseY, x + 5, y + CARD_H - 16, 12, 12)) {
+					this.settingsModule = m;
+				} else {
+					m.toggle();
 				}
 				return;
 			}
 		}
 	}
 
-	private void clickSettings(int mouseX, int mouseY, int button) {
-		if (button != 0) {
-			return;
-		}
-		int x = this.contentX();
-		int y = this.contentY();
-		int w = this.contentW() + 8;
-
-		if (inside(mouseX, mouseY, x, y, 44, 14)) {
-			this.settingsModule = null;
-			return;
-		}
-
-		int ry = y + 22;
-		for (MeteorSetting s : this.settingsModule.getSettings()) {
+	private void clickSettingRows(List<MeteorSetting> list, int x, int y, int w, int mouseX, int mouseY) {
+		int ry = y;
+		for (MeteorSetting s : list) {
 			int rh = rowHeight(s);
 			if (inside(mouseX, mouseY, x, ry, w, rh)) {
 				if (s.getType() == MeteorSetting.Type.BOOLEAN) {
@@ -541,6 +626,8 @@ public class ClickGuiScreen extends GuiScreen {
 		if (keyCode == KEY_ESCAPE) {
 			if (this.settingsModule != null) {
 				this.settingsModule = null;
+			} else if (settingsPage) {
+				settingsPage = false;
 			} else if (!this.search.isEmpty()) {
 				this.search = "";
 				scrollRow = 0;
@@ -550,24 +637,25 @@ public class ClickGuiScreen extends GuiScreen {
 			return;
 		}
 
-		if (this.settingsModule == null && (keyCode == KEY_UP || keyCode == KEY_DOWN)) {
-			scrollRow = Math.max(0, scrollRow + (keyCode == KEY_DOWN ? 1 : -1));
+		boolean gridShown = this.settingsModule == null && !settingsPage;
+		if (!gridShown) {
 			return;
 		}
 
-		if (this.settingsModule == null) {
-			if (keyCode == KEY_BACKSPACE) {
-				if (!this.search.isEmpty()) {
-					this.search = this.search.substring(0, this.search.length() - 1);
-					scrollRow = 0;
-				}
-				return;
-			}
-			if (typedChar >= 32 && typedChar != 127
-					&& this.fontRendererObj.getStringWidth(this.search) < SEARCH_W - 20) {
-				this.search += typedChar;
+		if (keyCode == KEY_UP || keyCode == KEY_DOWN) {
+			scrollRow = Math.max(0, scrollRow + (keyCode == KEY_DOWN ? 1 : -1));
+			return;
+		}
+		if (keyCode == KEY_BACKSPACE) {
+			if (!this.search.isEmpty()) {
+				this.search = this.search.substring(0, this.search.length() - 1);
 				scrollRow = 0;
 			}
+			return;
+		}
+		if (typedChar >= 32 && typedChar != 127 && this.fontRendererObj.getStringWidth(this.search) < SEARCH_W - 20) {
+			this.search += typedChar;
+			scrollRow = 0;
 		}
 	}
 
@@ -955,6 +1043,11 @@ final class MeteorModuleManager {
 
 	public static boolean menuEmbers() {
 		return MENU_FX.isEnabled() && MENU_FX.embers.getBoolean();
+	}
+
+	/** Menu Effects options, shown on the ClickGUI Settings page. */
+	static List<MeteorSetting> menuEffectSettings() {
+		return MENU_FX.getSettings();
 	}
 
 	/**
