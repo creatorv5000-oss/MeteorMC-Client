@@ -55,8 +55,8 @@ public class GuiMainMenu extends GuiScreen {
         if (button.id == 2) this.mc.displayGuiScreen(new GuiMultiplayer(this));
         if (button.id == 4) this.mc.shutdown();
         if (button.id == 14) {
-            // Optional: Route to custom client setting panel if you have one
-            this.mc.displayGuiScreen(new GuiOptions(this, this.mc.gameSettings)); 
+            // Open Meteor Click GUI (non-destructive; toggles in-memory state only)
+            this.mc.displayGuiScreen(new GuiClickGui());
         }
     }
 
