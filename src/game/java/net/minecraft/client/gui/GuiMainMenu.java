@@ -5,7 +5,7 @@ import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.resources.I18n;
 import org.lwjgl.opengl.GL11;
 
-public class GuiCustomMainMenu extends GuiScreen {
+public class GuiMainMenu extends GuiScreen {
 
     // --- Configuration & Theme Constants ---
     private static final String TITLE = "METEOR MC";
@@ -21,7 +21,7 @@ public class GuiCustomMainMenu extends GuiScreen {
     private static final int METEOR_OUTER = 0xAAFF3300;
     private static final int METEOR_CORE = 0xFFFFFFFF;
 
-    public GuiCustomMainMenu() {
+    public GuiMainMenu() {
         // Constructor
     }
 
