@@ -3,7 +3,7 @@ package net.minecraft.client.gui;
 import java.io.IOException;
 
 /**
- * Minimal stub that preserves the expected GuiMainMenu symbol without duplicating ClickGuiScreen.
+ * GuiMainMenu redirects to ClickGuiScreen to show the modded main menu.
  */
 public class GuiMainMenu extends GuiScreen {
     public GuiMainMenu() {
@@ -11,16 +11,7 @@ public class GuiMainMenu extends GuiScreen {
 
     @Override
     public void initGui() {
-        // stub
-    }
-
-    @Override
-    public void drawScreen(int mouseX, int mouseY, float partialTicks) {
-        super.drawScreen(mouseX, mouseY, partialTicks);
-    }
-
-    @Override
-    protected void mouseClicked(int mouseX, int mouseY, int mouseButton) throws IOException {
-        super.mouseClicked(mouseX, mouseY, mouseButton);
+        // Open the ClickGuiScreen so the main menu is not a black stub.
+        this.mc.displayGuiScreen(new ClickGuiScreen());
     }
 }
