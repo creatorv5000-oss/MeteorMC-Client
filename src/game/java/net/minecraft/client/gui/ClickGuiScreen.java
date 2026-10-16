@@ -3,6 +3,7 @@ package net.minecraft.client.gui;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -10,6 +11,15 @@ import java.util.Map;
 import net.lax1dude.eaglercraft.opengl.GlStateManager;
 import net.lax1dude.eaglercraft.opengl.RealOpenGLEnums;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.RenderHelper;
+import net.minecraft.client.renderer.RenderItem;
+import net.minecraft.client.resources.I18n;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.item.ItemStack;
+import net.minecraft.potion.Potion;
+import net.minecraft.potion.PotionEffect;
+import net.minecraft.util.StringUtils;
 
 /**
  * MeteorMC ClickGUI: one centered window with category tabs, a search box and
@@ -17,7 +27,7 @@ import net.minecraft.client.Minecraft;
  *
  * Click a card: toggle the module.
  * Right click a card (or click its ".." corner): open its settings.
- * Type to search. Drag the scrollbar if there are many modules.
+ * Type to search. Drag the scrollbar or use the Up / Down arrow keys to scroll.
  * Esc: back / clear search / close.
  */
 public class ClickGuiScreen extends GuiScreen {
@@ -25,13 +35,13 @@ public class ClickGuiScreen extends GuiScreen {
 	// ===================== STYLE =====================
 	private static final String TITLE = "MeteorMC";
 
-	private static final int WIN_W = 340;
-	private static final int WIN_H = 220;
+	private static final int WIN_W = 420;
+	private static final int WIN_H = 260;
 	private static final int HEADER = 28;
 	private static final int COLS = 3;
 	private static final int GAP = 6;
 	private static final int CARD_H = 44;
-	private static final int SEARCH_W = 86;
+	private static final int SEARCH_W = 80;
 
 	private static final int BG_TOP = 0xFF0B0A06;
 	private static final int BG_BOTTOM = 0xFF2E2208;
@@ -63,6 +73,8 @@ public class ClickGuiScreen extends GuiScreen {
 
 	private static final int KEY_ESCAPE = 1;
 	private static final int KEY_BACKSPACE = 14;
+	private static final int KEY_UP = 200;
+	private static final int KEY_DOWN = 208;
 
 	/** Remembered between openings. */
 	private static int selectedTab = 0;
@@ -160,13 +172,13 @@ public class ClickGuiScreen extends GuiScreen {
 	private int tabX(int i) {
 		int x = this.winX + 92;
 		for (int k = 0; k < i; ++k) {
-			x += this.fontRendererObj.getStringWidth(this.tabLabel(k)) + 14;
+			x += this.fontRendererObj.getStringWidth(this.tabLabel(k)) + 10;
 		}
 		return x;
 	}
 
 	private int tabW(int i) {
-		return this.fontRendererObj.getStringWidth(this.tabLabel(i)) + 14;
+		return this.fontRendererObj.getStringWidth(this.tabLabel(i)) + 10;
 	}
 
 	private List<MeteorModule> filtered() {
@@ -538,6 +550,11 @@ public class ClickGuiScreen extends GuiScreen {
 			return;
 		}
 
+		if (this.settingsModule == null && (keyCode == KEY_UP || keyCode == KEY_DOWN)) {
+			scrollRow = Math.max(0, scrollRow + (keyCode == KEY_DOWN ? 1 : -1));
+			return;
+		}
+
 		if (this.settingsModule == null) {
 			if (keyCode == KEY_BACKSPACE) {
 				if (!this.search.isEmpty()) {
@@ -663,7 +680,7 @@ public class ClickGuiScreen extends GuiScreen {
 abstract class MeteorModule {
 
 	public enum Category {
-		VISUAL("Visual"), HUD("HUD"), MISC("Misc");
+		VISUAL("Visual"), HUD("HUD"), COMBAT("Combat"), MOVEMENT("Movement"), MISC("Misc");
 
 		private final String label;
 
@@ -826,23 +843,66 @@ class MeteorSetting {
 /**
  * Holds every module. To add a feature, write a MeteorModule subclass below and
  * register it in the static block.
+ *
+ * HUD text modules stack down the left side of the screen in the order they
+ * are registered (see nextHudY / hudLine).
  */
 final class MeteorModuleManager {
 
 	private static final List<MeteorModule> MODULES = new ArrayList<MeteorModule>();
 	private static final MenuEffects MENU_FX = new MenuEffects();
+	private static final int HUD_COLOR = 0xFFFFD83A;
+	private static int hudY = 4;
 
 	static {
 		register(MENU_FX);
 		MENU_FX.setEnabled(true);
-		register(new Watermark());
-		register(new FpsDisplay());
+
+		// HUD
+		registerOn(new Watermark());
+		registerOn(new FpsDisplay());
 		register(new Clock());
 		register(new Coordinates());
-		register(new CpsCounter());
+		register(new Compass());
 		register(new Keystrokes());
+		register(new ArmorStatus());
+		register(new HeldItem());
+		register(new PotionStatus());
+		register(new HealthDisplay());
+		register(new HungerDisplay());
+		register(new ArmorPoints());
+		register(new DayCounter());
+		register(new GameTime());
+		register(new EntityCount());
+		register(new PlayerCount());
+		register(new SessionTimer());
+
+		// Combat (information and quality of life only)
+		register(new CpsCounter());
+		register(new TargetHud());
+		register(new TargetDistance());
+		register(new AttackIndicator());
+		register(new LowHealthWarning());
+		register(new ArmorWarning());
+		register(new ShowHitboxes());
+		register(new ReachDisplay());
+		register(new HitCounter());
+		register(new DamageTaken());
+		register(new CombatTimer());
+		register(new CritIndicator());
+		register(new AttackCooldown());
+
+		// Movement
+		register(new ToggleSprint());
+		register(new SprintStatus());
+		register(new SpeedDisplay());
+		register(new DistanceTraveled());
+		register(new FallDistance());
+
+		// Visual
 		register(new Zoom());
 		register(new NoRain());
+		register(new TimeChanger());
 	}
 
 	private MeteorModuleManager() {
@@ -850,6 +910,12 @@ final class MeteorModuleManager {
 
 	private static void register(MeteorModule module) {
 		MODULES.add(module);
+	}
+
+	/** Registers a module and switches it on by default. */
+	private static void registerOn(MeteorModule module) {
+		MODULES.add(module);
+		module.setEnabled(true);
 	}
 
 	public static List<MeteorModule> getModules() {
@@ -880,15 +946,35 @@ final class MeteorModuleManager {
 	}
 
 	/**
-	 * Call this once per frame from the in-game HUD (end of
-	 * GuiIngame.renderGameOverlay).
+	 * Called once per frame from GuiIngame.renderGameOverlay.
 	 */
 	public static void renderHud() {
+		hudY = 4;
+		GlStateManager.enableBlend();
+		GlStateManager.enableAlpha();
+		GlStateManager.tryBlendFuncSeparate(RealOpenGLEnums.GL_SRC_ALPHA, RealOpenGLEnums.GL_ONE_MINUS_SRC_ALPHA,
+				RealOpenGLEnums.GL_ONE, RealOpenGLEnums.GL_ZERO);
 		for (MeteorModule m : MODULES) {
 			if (m.isEnabled()) {
-				m.onRender();
+				try {
+					m.onRender();
+				} catch (Throwable t) {
+					m.setEnabled(false);
+				}
 			}
 		}
+		GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+	}
+
+	/** Reserves a block of the left-side HUD stack and returns its top Y. */
+	static int nextHudY(int height) {
+		int y = hudY;
+		hudY += height + 1;
+		return y;
+	}
+
+	static void hudLine(String text, int color, boolean shadow) {
+		drawHudText(text, 4, nextHudY(10), color, shadow, 1.0F);
 	}
 
 	private static void drawHudText(String text, int x, int y, int color, boolean shadow, float scale) {
@@ -899,7 +985,45 @@ final class MeteorModuleManager {
 		GlStateManager.popMatrix();
 	}
 
-	// ------------------------- Modules -------------------------
+	private static void drawCentered(String text, int cx, int y, int color, boolean shadow) {
+		FontRenderer f = Minecraft.getMinecraft().fontRendererObj;
+		f.drawString(text, (float) (cx - f.getStringWidth(text) / 2), (float) y, color, shadow);
+	}
+
+	private static String one(double v) {
+		return String.valueOf(Math.round(v * 10.0D) / 10.0D);
+	}
+
+	private static boolean blink() {
+		return (Minecraft.getSystemTime() / 350L) % 2L == 0L;
+	}
+
+	// ------------------------- Base for simple text modules -------------------------
+
+	private static abstract class HudText extends MeteorModule {
+		final MeteorSetting shadow = addSetting(MeteorSetting.bool("Shadow", true));
+
+		HudText(String name, String description, Category category) {
+			super(name, description, category);
+		}
+
+		/** Return the line to show, or null to show nothing. */
+		abstract String text(Minecraft m);
+
+		int color(Minecraft m) {
+			return HUD_COLOR;
+		}
+
+		public void onRender() {
+			Minecraft m = mc();
+			String t = text(m);
+			if (t != null) {
+				hudLine(t, color(m), shadow.getBoolean());
+			}
+		}
+	}
+
+	// ------------------------- Visual -------------------------
 
 	/** Stars, shooting meteors and embers on the menus. */
 	private static class MenuEffects extends MeteorModule {
@@ -909,171 +1033,6 @@ final class MeteorModuleManager {
 
 		MenuEffects() {
 			super("Menu Effects", "Stars, meteors and embers on menus.", Category.VISUAL);
-		}
-	}
-
-	/** Shows the client name in the corner. */
-	private static class Watermark extends MeteorModule {
-		private final MeteorSetting shadow = addSetting(MeteorSetting.bool("Shadow", true));
-
-		Watermark() {
-			super("Watermark", "Shows the client name.", Category.HUD);
-		}
-
-		public void onRender() {
-			drawHudText("MeteorMC", 4, 4, 0xFFFFB020, shadow.getBoolean(), 1.0F);
-		}
-	}
-
-	/** Shows frames per second in the corner. */
-	private static class FpsDisplay extends MeteorModule {
-		private final MeteorSetting shadow = addSetting(MeteorSetting.bool("Shadow", true));
-		private final MeteorSetting scale = addSetting(MeteorSetting.number("Scale", 1.0D, 0.5D, 2.0D, 0.25D));
-		private int frames;
-		private int fps;
-		private long last = Minecraft.getSystemTime();
-
-		FpsDisplay() {
-			super("FPS Display", "Shows your frame rate.", Category.HUD);
-		}
-
-		public void onRender() {
-			frames++;
-			long now = Minecraft.getSystemTime();
-			if (now - last >= 1000L) {
-				fps = frames;
-				frames = 0;
-				last = now;
-			}
-			drawHudText("FPS: " + fps, 4, 16, 0xFFFFD83A, shadow.getBoolean(), scale.getFloat());
-		}
-	}
-
-	/** Shows the current time. */
-	private static class Clock extends MeteorModule {
-		private final MeteorSetting shadow = addSetting(MeteorSetting.bool("Shadow", true));
-		private final MeteorSetting hour24 = addSetting(MeteorSetting.bool("24 Hour", false));
-
-		Clock() {
-			super("Clock", "Shows the current time.", Category.HUD);
-		}
-
-		public void onRender() {
-			Calendar c = Calendar.getInstance();
-			int h = c.get(Calendar.HOUR_OF_DAY);
-			int min = c.get(Calendar.MINUTE);
-			String suffix = "";
-			if (!hour24.getBoolean()) {
-				suffix = h >= 12 ? " PM" : " AM";
-				h = h % 12;
-				if (h == 0) {
-					h = 12;
-				}
-			}
-			String text = h + ":" + (min < 10 ? "0" : "") + min + suffix;
-			drawHudText(text, 4, 28, 0xFFFFD83A, shadow.getBoolean(), 1.0F);
-		}
-	}
-
-	/** Shows your block position and the direction you face. */
-	private static class Coordinates extends MeteorModule {
-		private static final String[] DIRS = { "S", "W", "N", "E" };
-		private final MeteorSetting shadow = addSetting(MeteorSetting.bool("Shadow", true));
-		private final MeteorSetting direction = addSetting(MeteorSetting.bool("Direction", true));
-
-		Coordinates() {
-			super("Coordinates", "Shows your XYZ position.", Category.HUD);
-		}
-
-		public void onRender() {
-			Minecraft m = mc();
-			if (m.player == null) {
-				return;
-			}
-			int x = (int) Math.floor(m.player.posX);
-			int y = (int) Math.floor(m.player.posY);
-			int z = (int) Math.floor(m.player.posZ);
-			String text = "XYZ: " + x + " / " + y + " / " + z;
-			if (direction.getBoolean()) {
-				int d = (int) Math.floor(m.player.rotationYaw * 4.0F / 360.0F + 0.5D) & 3;
-				text += "  " + DIRS[d];
-			}
-			drawHudText(text, 4, 40, 0xFFFFD83A, shadow.getBoolean(), 1.0F);
-		}
-	}
-
-	/** Clicks per second, counted from your attack / use button presses. */
-	private static class CpsCounter extends MeteorModule {
-		private final MeteorSetting shadow = addSetting(MeteorSetting.bool("Shadow", true));
-		private final MeteorSetting rightClick = addSetting(MeteorSetting.bool("Right Click", false));
-		private final List<Long> leftClicks = new ArrayList<Long>();
-		private final List<Long> rightClicks = new ArrayList<Long>();
-		private boolean lastLeft;
-		private boolean lastRight;
-
-		CpsCounter() {
-			super("CPS Counter", "Shows your clicks per second.", Category.HUD);
-		}
-
-		public void onRender() {
-			Minecraft m = mc();
-			long now = Minecraft.getSystemTime();
-
-			boolean left = m.gameSettings.keyBindAttack.isKeyDown();
-			if (left && !lastLeft) {
-				leftClicks.add(Long.valueOf(now));
-			}
-			lastLeft = left;
-
-			boolean right = m.gameSettings.keyBindUseItem.isKeyDown();
-			if (right && !lastRight) {
-				rightClicks.add(Long.valueOf(now));
-			}
-			lastRight = right;
-
-			while (!leftClicks.isEmpty() && now - leftClicks.get(0).longValue() > 1000L) {
-				leftClicks.remove(0);
-			}
-			while (!rightClicks.isEmpty() && now - rightClicks.get(0).longValue() > 1000L) {
-				rightClicks.remove(0);
-			}
-
-			String text = "CPS: " + leftClicks.size();
-			if (rightClick.getBoolean()) {
-				text += " | " + rightClicks.size();
-			}
-			drawHudText(text, 4, 52, 0xFFFFD83A, shadow.getBoolean(), 1.0F);
-		}
-	}
-
-	/** On-screen WASD and mouse button display. */
-	private static class Keystrokes extends MeteorModule {
-		private final MeteorSetting mouse = addSetting(MeteorSetting.bool("Mouse Buttons", true));
-
-		Keystrokes() {
-			super("Keystrokes", "Shows the keys you are pressing.", Category.HUD);
-		}
-
-		public void onRender() {
-			Minecraft m = mc();
-			int x = 4;
-			int y = 66;
-			drawKey(m.gameSettings.keyBindForward.isKeyDown(), "W", x + 20, y, 18, 18);
-			drawKey(m.gameSettings.keyBindLeft.isKeyDown(), "A", x, y + 20, 18, 18);
-			drawKey(m.gameSettings.keyBindBack.isKeyDown(), "S", x + 20, y + 20, 18, 18);
-			drawKey(m.gameSettings.keyBindRight.isKeyDown(), "D", x + 40, y + 20, 18, 18);
-			if (mouse.getBoolean()) {
-				drawKey(m.gameSettings.keyBindAttack.isKeyDown(), "LMB", x, y + 40, 29, 16);
-				drawKey(m.gameSettings.keyBindUseItem.isKeyDown(), "RMB", x + 31, y + 40, 27, 16);
-			}
-		}
-
-		private void drawKey(boolean down, String label, int x, int y, int w, int h) {
-			Gui.drawRect(x, y, x + w, y + h, down ? 0xD0FFC21F : 0x90000000);
-			Gui.drawRect(x, y, x + w, y + 1, down ? 0xFFFFE680 : 0x607A6422);
-			FontRenderer f = mc().fontRendererObj;
-			f.drawString(label, (float) (x + (w - f.getStringWidth(label)) / 2), (float) (y + (h - 8) / 2),
-					down ? 0xFF1A1208 : 0xFFF2EAD0, false);
 		}
 	}
 
@@ -1112,6 +1071,858 @@ final class MeteorModuleManager {
 				m.world.setRainStrength(0.0F);
 				m.world.setThunderStrength(0.0F);
 			}
+		}
+	}
+
+	/** Sets the time of day on your screen only. */
+	private static class TimeChanger extends MeteorModule {
+		private final MeteorSetting time = addSetting(MeteorSetting.number("Time", 6000.0D, 0.0D, 24000.0D, 1000.0D));
+
+		TimeChanger() {
+			super("Time Changer", "Pick the time of day you see.", Category.VISUAL);
+		}
+
+		public void onRender() {
+			Minecraft m = mc();
+			if (m.world != null) {
+				m.world.setWorldTime((long) time.getDouble());
+			}
+		}
+	}
+
+	// ------------------------- HUD -------------------------
+
+	/** Shows the client name in the corner. */
+	private static class Watermark extends HudText {
+		Watermark() {
+			super("Watermark", "Shows the client name.", Category.HUD);
+		}
+
+		String text(Minecraft m) {
+			return "MeteorMC";
+		}
+
+		int color(Minecraft m) {
+			return 0xFFFFB020;
+		}
+	}
+
+	/** Shows frames per second. */
+	private static class FpsDisplay extends MeteorModule {
+		private final MeteorSetting shadow = addSetting(MeteorSetting.bool("Shadow", true));
+		private final MeteorSetting scale = addSetting(MeteorSetting.number("Scale", 1.0D, 0.5D, 2.0D, 0.25D));
+		private int frames;
+		private int fps;
+		private long last = Minecraft.getSystemTime();
+
+		FpsDisplay() {
+			super("FPS Display", "Shows your frame rate.", Category.HUD);
+		}
+
+		public void onRender() {
+			frames++;
+			long now = Minecraft.getSystemTime();
+			if (now - last >= 1000L) {
+				fps = frames;
+				frames = 0;
+				last = now;
+			}
+			int y = nextHudY((int) (9.0F * scale.getFloat()) + 1);
+			drawHudText("FPS: " + fps, 4, y, HUD_COLOR, shadow.getBoolean(), scale.getFloat());
+		}
+	}
+
+	/** Shows the current time. */
+	private static class Clock extends HudText {
+		private final MeteorSetting hour24 = addSetting(MeteorSetting.bool("24 Hour", false));
+
+		Clock() {
+			super("Clock", "Shows the current time.", Category.HUD);
+		}
+
+		String text(Minecraft m) {
+			Calendar c = Calendar.getInstance();
+			int h = c.get(Calendar.HOUR_OF_DAY);
+			int min = c.get(Calendar.MINUTE);
+			String suffix = "";
+			if (!hour24.getBoolean()) {
+				suffix = h >= 12 ? " PM" : " AM";
+				h = h % 12;
+				if (h == 0) {
+					h = 12;
+				}
+			}
+			return h + ":" + (min < 10 ? "0" : "") + min + suffix;
+		}
+	}
+
+	/** Shows your block position and the direction you face. */
+	private static class Coordinates extends HudText {
+		private static final String[] DIRS = { "S", "W", "N", "E" };
+		private final MeteorSetting direction = addSetting(MeteorSetting.bool("Direction", true));
+
+		Coordinates() {
+			super("Coordinates", "Shows your XYZ position.", Category.HUD);
+		}
+
+		String text(Minecraft m) {
+			if (m.player == null) {
+				return null;
+			}
+			int x = (int) Math.floor(m.player.posX);
+			int y = (int) Math.floor(m.player.posY);
+			int z = (int) Math.floor(m.player.posZ);
+			String t = "XYZ: " + x + " / " + y + " / " + z;
+			if (direction.getBoolean()) {
+				int d = (int) Math.floor(m.player.rotationYaw * 4.0F / 360.0F + 0.5D) & 3;
+				t += "  " + DIRS[d];
+			}
+			return t;
+		}
+	}
+
+	/** Shows which way you are facing, with eight directions and degrees. */
+	private static class Compass extends HudText {
+		private static final String[] DIRS = { "S", "SW", "W", "NW", "N", "NE", "E", "SE" };
+
+		Compass() {
+			super("Compass", "Shows your facing direction.", Category.HUD);
+		}
+
+		String text(Minecraft m) {
+			if (m.player == null) {
+				return null;
+			}
+			float yaw = ((m.player.rotationYaw % 360.0F) + 360.0F) % 360.0F;
+			int d = (int) Math.floor(yaw / 45.0F + 0.5F) & 7;
+			return "Facing: " + DIRS[d] + " (" + (int) yaw + ")";
+		}
+	}
+
+	/** On-screen WASD and mouse button display. */
+	private static class Keystrokes extends MeteorModule {
+		private final MeteorSetting mouse = addSetting(MeteorSetting.bool("Mouse Buttons", true));
+
+		Keystrokes() {
+			super("Keystrokes", "Shows the keys you are pressing.", Category.HUD);
+		}
+
+		public void onRender() {
+			Minecraft m = mc();
+			int x = 4;
+			int y = nextHudY(mouse.getBoolean() ? 58 : 40);
+			drawKey(m.gameSettings.keyBindForward.isKeyDown(), "W", x + 20, y, 18, 18);
+			drawKey(m.gameSettings.keyBindLeft.isKeyDown(), "A", x, y + 20, 18, 18);
+			drawKey(m.gameSettings.keyBindBack.isKeyDown(), "S", x + 20, y + 20, 18, 18);
+			drawKey(m.gameSettings.keyBindRight.isKeyDown(), "D", x + 40, y + 20, 18, 18);
+			if (mouse.getBoolean()) {
+				drawKey(m.gameSettings.keyBindAttack.isKeyDown(), "LMB", x, y + 40, 29, 16);
+				drawKey(m.gameSettings.keyBindUseItem.isKeyDown(), "RMB", x + 31, y + 40, 27, 16);
+			}
+		}
+
+		private void drawKey(boolean down, String label, int x, int y, int w, int h) {
+			Gui.drawRect(x, y, x + w, y + h, down ? 0xD0FFC21F : 0x90000000);
+			Gui.drawRect(x, y, x + w, y + 1, down ? 0xFFFFE680 : 0x607A6422);
+			FontRenderer f = mc().fontRendererObj;
+			f.drawString(label, (float) (x + (w - f.getStringWidth(label)) / 2), (float) (y + (h - 8) / 2),
+					down ? 0xFF1A1208 : 0xFFF2EAD0, false);
+		}
+	}
+
+	/** Armor pieces with durability. */
+	private static class ArmorStatus extends MeteorModule {
+		private final MeteorSetting numbers = addSetting(MeteorSetting.bool("Durability Numbers", true));
+
+		ArmorStatus() {
+			super("Armor Status", "Shows your armor and its durability.", Category.HUD);
+		}
+
+		public void onRender() {
+			Minecraft m = mc();
+			if (m.player == null) {
+				return;
+			}
+			int count = 0;
+			for (int slot = 0; slot < 4; ++slot) {
+				if (!m.player.inventory.armorItemInSlot(slot).func_190926_b()) {
+					count++;
+				}
+			}
+			if (count == 0) {
+				return;
+			}
+
+			int y0 = nextHudY(count * 18);
+			RenderItem ri = m.getRenderItem();
+			GlStateManager.enableRescaleNormal();
+			RenderHelper.enableGUIStandardItemLighting();
+			int row = 0;
+			for (int slot = 3; slot >= 0; --slot) {
+				ItemStack stack = m.player.inventory.armorItemInSlot(slot);
+				if (stack.func_190926_b()) {
+					continue;
+				}
+				int y = y0 + row * 18;
+				ri.renderItemAndEffectIntoGUI(m.player, stack, 4, y);
+				ri.renderItemOverlays(m.fontRendererObj, stack, 4, y);
+				row++;
+			}
+			RenderHelper.disableStandardItemLighting();
+			GlStateManager.disableRescaleNormal();
+
+			if (numbers.getBoolean()) {
+				row = 0;
+				for (int slot = 3; slot >= 0; --slot) {
+					ItemStack stack = m.player.inventory.armorItemInSlot(slot);
+					if (stack.func_190926_b()) {
+						continue;
+					}
+					if (stack.isItemStackDamageable()) {
+						int max = stack.getMaxDamage();
+						int left = max - stack.getItemDamage();
+						int pct = max > 0 ? left * 100 / max : 100;
+						int color = pct > 50 ? 0xFF55FF55 : (pct > 25 ? 0xFFFFAA00 : 0xFFFF5555);
+						m.fontRendererObj.drawString(left + "/" + max, 24.0F, (float) (y0 + row * 18 + 4), color, true);
+					}
+					row++;
+				}
+			}
+		}
+	}
+
+	/** Name and durability of the item in your hand. */
+	private static class HeldItem extends HudText {
+		HeldItem() {
+			super("Held Item", "Shows the item you are holding.", Category.HUD);
+		}
+
+		String text(Minecraft m) {
+			if (m.player == null) {
+				return null;
+			}
+			ItemStack stack = m.player.inventory.getCurrentItem();
+			if (stack.func_190926_b()) {
+				return null;
+			}
+			String s = stack.getDisplayName();
+			if (stack.isItemStackDamageable()) {
+				int max = stack.getMaxDamage();
+				s += " (" + (max - stack.getItemDamage()) + "/" + max + ")";
+			}
+			return s;
+		}
+	}
+
+	/** Active potion effects with time left. */
+	private static class PotionStatus extends MeteorModule {
+		private final MeteorSetting shadow = addSetting(MeteorSetting.bool("Shadow", true));
+
+		PotionStatus() {
+			super("Potion Status", "Shows active potion effects.", Category.HUD);
+		}
+
+		public void onRender() {
+			Minecraft m = mc();
+			if (m.player == null) {
+				return;
+			}
+			Collection<PotionEffect> effects = m.player.getActivePotionEffects();
+			for (PotionEffect e : effects) {
+				Potion p = e.getPotion();
+				String t = I18n.format(p.getName()) + " " + (e.getAmplifier() + 1) + "  "
+						+ StringUtils.ticksToElapsedTime(e.getDuration());
+				hudLine(t, p.isBeneficial() ? 0xFF55FFFF : 0xFFFF7777, shadow.getBoolean());
+			}
+		}
+	}
+
+	/** Your health as a number. */
+	private static class HealthDisplay extends HudText {
+		HealthDisplay() {
+			super("Health", "Shows your health as a number.", Category.HUD);
+		}
+
+		String text(Minecraft m) {
+			if (m.player == null) {
+				return null;
+			}
+			String t = "HP: " + one(m.player.getHealth());
+			float abs = m.player.getAbsorptionAmount();
+			if (abs > 0.0F) {
+				t += " +" + one(abs);
+			}
+			return t;
+		}
+
+		int color(Minecraft m) {
+			if (m.player == null) {
+				return HUD_COLOR;
+			}
+			float h = m.player.getHealth();
+			return h > 12.0F ? 0xFF55FF55 : (h > 6.0F ? 0xFFFFAA00 : 0xFFFF5555);
+		}
+	}
+
+	/** Food level and saturation. */
+	private static class HungerDisplay extends HudText {
+		HungerDisplay() {
+			super("Hunger", "Shows food level and saturation.", Category.HUD);
+		}
+
+		String text(Minecraft m) {
+			if (m.player == null) {
+				return null;
+			}
+			return "Food: " + m.player.getFoodStats().getFoodLevel() + "  Sat: "
+					+ one(m.player.getFoodStats().getSaturationLevel());
+		}
+	}
+
+	/** Total armor points. */
+	private static class ArmorPoints extends HudText {
+		ArmorPoints() {
+			super("Armor Points", "Shows your total armor value.", Category.HUD);
+		}
+
+		String text(Minecraft m) {
+			return m.player == null ? null : "Armor: " + m.player.getTotalArmorValue();
+		}
+	}
+
+	/** In-game day number. */
+	private static class DayCounter extends HudText {
+		DayCounter() {
+			super("Day Counter", "Shows the current world day.", Category.HUD);
+		}
+
+		String text(Minecraft m) {
+			return m.world == null ? null : "Day " + (m.world.getTotalWorldTime() / 24000L + 1L);
+		}
+	}
+
+	/** In-game time of day. */
+	private static class GameTime extends HudText {
+		GameTime() {
+			super("Game Time", "Shows the in-game time of day.", Category.HUD);
+		}
+
+		String text(Minecraft m) {
+			if (m.world == null) {
+				return null;
+			}
+			long t = m.world.getTotalWorldTime() % 24000L;
+			int hours = (int) ((t / 1000L + 6L) % 24L);
+			int mins = (int) ((t % 1000L) * 60L / 1000L);
+			return "Time: " + hours + ":" + (mins < 10 ? "0" : "") + mins;
+		}
+	}
+
+	/** Number of loaded entities. */
+	private static class EntityCount extends HudText {
+		EntityCount() {
+			super("Entity Count", "Shows how many entities are loaded.", Category.HUD);
+		}
+
+		String text(Minecraft m) {
+			return m.world == null ? null : "Entities: " + m.world.loadedEntityList.size();
+		}
+	}
+
+	/** Number of players on the server. */
+	private static class PlayerCount extends HudText {
+		PlayerCount() {
+			super("Player Count", "Shows players online.", Category.HUD);
+		}
+
+		String text(Minecraft m) {
+			if (m.player == null || m.player.connection == null) {
+				return null;
+			}
+			return "Players: " + m.player.connection.getPlayerInfoMap().size();
+		}
+	}
+
+	/** Time since you switched it on. */
+	private static class SessionTimer extends HudText {
+		private long start = Minecraft.getSystemTime();
+
+		SessionTimer() {
+			super("Session Timer", "Shows time since you turned it on.", Category.HUD);
+		}
+
+		protected void onEnable() {
+			start = Minecraft.getSystemTime();
+		}
+
+		String text(Minecraft m) {
+			long s = (Minecraft.getSystemTime() - start) / 1000L;
+			long mm = s / 60L;
+			long ss = s % 60L;
+			return "Session: " + mm + ":" + (ss < 10L ? "0" : "") + ss;
+		}
+	}
+
+	// ------------------------- Combat (info and quality of life) -------------------------
+
+	/** Clicks per second, counted from your attack / use button presses. */
+	private static class CpsCounter extends HudText {
+		private final MeteorSetting rightClick = addSetting(MeteorSetting.bool("Right Click", false));
+		private final List<Long> leftClicks = new ArrayList<Long>();
+		private final List<Long> rightClicks = new ArrayList<Long>();
+		private boolean lastLeft;
+		private boolean lastRight;
+
+		CpsCounter() {
+			super("CPS Counter", "Shows your clicks per second.", Category.COMBAT);
+		}
+
+		String text(Minecraft m) {
+			long now = Minecraft.getSystemTime();
+
+			boolean left = m.gameSettings.keyBindAttack.isKeyDown();
+			if (left && !lastLeft) {
+				leftClicks.add(Long.valueOf(now));
+			}
+			lastLeft = left;
+
+			boolean right = m.gameSettings.keyBindUseItem.isKeyDown();
+			if (right && !lastRight) {
+				rightClicks.add(Long.valueOf(now));
+			}
+			lastRight = right;
+
+			while (!leftClicks.isEmpty() && now - leftClicks.get(0).longValue() > 1000L) {
+				leftClicks.remove(0);
+			}
+			while (!rightClicks.isEmpty() && now - rightClicks.get(0).longValue() > 1000L) {
+				rightClicks.remove(0);
+			}
+
+			String t = "CPS: " + leftClicks.size();
+			if (rightClick.getBoolean()) {
+				t += " | " + rightClicks.size();
+			}
+			return t;
+		}
+	}
+
+	/** Health bar for the mob or player you are looking at. */
+	private static class TargetHud extends MeteorModule {
+		TargetHud() {
+			super("Target HUD", "Shows health of what you look at.", Category.COMBAT);
+		}
+
+		public void onRender() {
+			Minecraft m = mc();
+			Entity e = m.pointedEntity;
+			if (!(e instanceof EntityLivingBase)) {
+				return;
+			}
+			EntityLivingBase t = (EntityLivingBase) e;
+			int cx = m.scaledResolution.getScaledWidth() / 2;
+			int y = m.scaledResolution.getScaledHeight() / 2 + 18;
+			float hp = t.getHealth();
+			float max = Math.max(1.0F, t.getMaxHealth());
+			float frac = Math.max(0.0F, Math.min(1.0F, hp / max));
+
+			drawCentered(t.getName(), cx, y, 0xFFF2EAD0, true);
+			int bw = 60;
+			int bx = cx - bw / 2;
+			int by = y + 11;
+			Gui.drawRect(bx - 1, by - 1, bx + bw + 1, by + 5, 0xC0000000);
+			int fill = frac > 0.5F ? 0xFF55FF55 : (frac > 0.25F ? 0xFFFFAA00 : 0xFFFF5555);
+			Gui.drawRect(bx, by, bx + (int) (bw * frac), by + 4, fill);
+			drawCentered(one(hp) + " / " + one(max), cx, by + 7, HUD_COLOR, true);
+		}
+	}
+
+	/** Distance to the mob or player you are looking at. */
+	private static class TargetDistance extends HudText {
+		TargetDistance() {
+			super("Target Distance", "Shows distance to your target.", Category.COMBAT);
+		}
+
+		String text(Minecraft m) {
+			Entity e = m.pointedEntity;
+			if (e == null || m.player == null) {
+				return null;
+			}
+			double dx = e.posX - m.player.posX;
+			double dy = e.posY - m.player.posY;
+			double dz = e.posZ - m.player.posZ;
+			return "Target: " + one(Math.sqrt(dx * dx + dy * dy + dz * dz)) + " m";
+		}
+	}
+
+	/** Turns on the vanilla crosshair attack-cooldown indicator. */
+	private static class AttackIndicator extends MeteorModule {
+		private int saved = 1;
+
+		AttackIndicator() {
+			super("Attack Indicator", "Shows the attack cooldown by the crosshair.", Category.COMBAT);
+		}
+
+		protected void onEnable() {
+			saved = mc().gameSettings.attackIndicator;
+			mc().gameSettings.attackIndicator = 1;
+		}
+
+		protected void onDisable() {
+			mc().gameSettings.attackIndicator = saved;
+		}
+	}
+
+	/** Flashing warning when your health is low. */
+	private static class LowHealthWarning extends MeteorModule {
+		private final MeteorSetting hearts = addSetting(MeteorSetting.number("Hearts", 3.0D, 1.0D, 8.0D, 0.5D));
+
+		LowHealthWarning() {
+			super("Low Health Warning", "Flashes a warning at low health.", Category.COMBAT);
+		}
+
+		public void onRender() {
+			Minecraft m = mc();
+			if (m.player == null || m.player.getHealth() > hearts.getFloat() * 2.0F || !blink()) {
+				return;
+			}
+			drawCentered("LOW HEALTH", m.scaledResolution.getScaledWidth() / 2,
+					m.scaledResolution.getScaledHeight() / 2 - 50, 0xFFFF5555, true);
+		}
+	}
+
+	/** Flashing warning when a piece of armor is close to breaking. */
+	private static class ArmorWarning extends MeteorModule {
+		private final MeteorSetting percent = addSetting(MeteorSetting.number("Percent", 15.0D, 5.0D, 50.0D, 5.0D));
+
+		ArmorWarning() {
+			super("Armor Warning", "Warns when armor is nearly broken.", Category.COMBAT);
+		}
+
+		public void onRender() {
+			Minecraft m = mc();
+			if (m.player == null || !blink()) {
+				return;
+			}
+			boolean low = false;
+			for (int slot = 0; slot < 4; ++slot) {
+				ItemStack stack = m.player.inventory.armorItemInSlot(slot);
+				if (!stack.func_190926_b() && stack.isItemStackDamageable()) {
+					int max = stack.getMaxDamage();
+					int left = max - stack.getItemDamage();
+					if (max > 0 && left * 100 < max * percent.getDouble()) {
+						low = true;
+					}
+				}
+			}
+			if (low) {
+				drawCentered("ARMOR LOW", m.scaledResolution.getScaledWidth() / 2,
+						m.scaledResolution.getScaledHeight() / 2 - 40, 0xFFFFAA00, true);
+			}
+		}
+	}
+
+
+	/** Draws the vanilla hitbox outlines (same as pressing F3 + B). Visual only. */
+	private static class ShowHitboxes extends MeteorModule {
+		ShowHitboxes() {
+			super("Show Hitboxes", "Outlines mob and player hitboxes.", Category.COMBAT);
+		}
+
+		protected void onEnable() {
+			mc().getRenderManager().setDebugBoundingBox(true);
+		}
+
+		protected void onDisable() {
+			mc().getRenderManager().setDebugBoundingBox(false);
+		}
+	}
+
+	/** Distance of your last hit (approximate, measured to the target's center). */
+	private static class ReachDisplay extends HudText {
+		private boolean last;
+		private boolean any;
+		private double dist;
+
+		ReachDisplay() {
+			super("Reach Display", "Shows the distance of your last hit.", Category.COMBAT);
+		}
+
+		String text(Minecraft m) {
+			if (m.player == null) {
+				return null;
+			}
+			boolean down = m.gameSettings.keyBindAttack.isKeyDown();
+			Entity e = m.pointedEntity;
+			if (down && !last && e != null) {
+				double dx = e.posX - m.player.posX;
+				double dy = (e.posY + e.height / 2.0F) - (m.player.posY + m.player.getEyeHeight());
+				double dz = e.posZ - m.player.posZ;
+				dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+				any = true;
+			}
+			last = down;
+			return any ? "Reach: " + one(dist) + " m" : "Reach: -";
+		}
+	}
+
+	/** Counts your clicks on a target, with a combo that resets after 3 seconds. */
+	private static class HitCounter extends HudText {
+		private int hits;
+		private int combo;
+		private long lastHit;
+		private boolean last;
+
+		HitCounter() {
+			super("Hit Counter", "Counts your hits and combo.", Category.COMBAT);
+		}
+
+		protected void onEnable() {
+			hits = 0;
+			combo = 0;
+		}
+
+		String text(Minecraft m) {
+			long now = Minecraft.getSystemTime();
+			boolean down = m.gameSettings.keyBindAttack.isKeyDown();
+			if (down && !last && m.pointedEntity != null) {
+				hits++;
+				combo++;
+				lastHit = now;
+			}
+			last = down;
+			if (combo > 0 && now - lastHit > 3000L) {
+				combo = 0;
+			}
+			return "Hits: " + hits + "  Combo: " + combo;
+		}
+	}
+
+	/** Shows the last hit of damage you took and the total. */
+	private static class DamageTaken extends HudText {
+		private float lastHealth = -1.0F;
+		private float lastDamage;
+		private float total;
+
+		DamageTaken() {
+			super("Damage Taken", "Shows damage you have taken.", Category.COMBAT);
+		}
+
+		protected void onEnable() {
+			lastHealth = -1.0F;
+			lastDamage = 0.0F;
+			total = 0.0F;
+		}
+
+		String text(Minecraft m) {
+			if (m.player == null) {
+				return null;
+			}
+			float h = m.player.getHealth();
+			if (lastHealth >= 0.0F && h < lastHealth) {
+				lastDamage = lastHealth - h;
+				total += lastDamage;
+			}
+			lastHealth = h;
+			return "Damage: -" + one(lastDamage) + "  Total: " + one(total);
+		}
+	}
+
+	/** Countdown since your last hit or the last time you took damage. */
+	private static class CombatTimer extends HudText {
+		private final MeteorSetting seconds = addSetting(MeteorSetting.number("Seconds", 10.0D, 3.0D, 30.0D, 1.0D));
+		private long lastEvent;
+		private boolean last;
+		private float lastHealth = -1.0F;
+
+		CombatTimer() {
+			super("Combat Timer", "Shows time left in combat.", Category.COMBAT);
+		}
+
+		private boolean inCombat(long now) {
+			return lastEvent != 0L && now - lastEvent < (long) (seconds.getDouble() * 1000.0D);
+		}
+
+		String text(Minecraft m) {
+			if (m.player == null) {
+				return null;
+			}
+			long now = Minecraft.getSystemTime();
+			boolean down = m.gameSettings.keyBindAttack.isKeyDown();
+			if (down && !last && m.pointedEntity != null) {
+				lastEvent = now;
+			}
+			last = down;
+			float h = m.player.getHealth();
+			if (lastHealth >= 0.0F && h < lastHealth) {
+				lastEvent = now;
+			}
+			lastHealth = h;
+			if (!inCombat(now)) {
+				return "Combat: Safe";
+			}
+			long left = (long) (seconds.getDouble() * 1000.0D) - (now - lastEvent);
+			return "Combat: " + (left / 1000L + 1L) + "s";
+		}
+
+		int color(Minecraft m) {
+			return inCombat(Minecraft.getSystemTime()) ? 0xFFFF5555 : 0xFF55FF55;
+		}
+	}
+
+	/** Shows CRIT when a hit right now would be a critical hit. */
+	private static class CritIndicator extends MeteorModule {
+		CritIndicator() {
+			super("Crit Indicator", "Shows when your next hit would crit.", Category.COMBAT);
+		}
+
+		public void onRender() {
+			Minecraft m = mc();
+			if (m.player == null) {
+				return;
+			}
+			boolean crit = m.player.fallDistance > 0.0F && !m.player.onGround && !m.player.isInWater()
+					&& !m.player.isSprinting() && m.player.getCooledAttackStrength(0.0F) > 0.9F;
+			if (crit) {
+				drawCentered("CRIT", m.scaledResolution.getScaledWidth() / 2,
+						m.scaledResolution.getScaledHeight() / 2 - 28, 0xFFFFAA00, true);
+			}
+		}
+	}
+
+	/** Your attack cooldown as a percentage. */
+	private static class AttackCooldown extends HudText {
+		AttackCooldown() {
+			super("Attack Cooldown", "Shows your weapon cooldown.", Category.COMBAT);
+		}
+
+		String text(Minecraft m) {
+			if (m.player == null) {
+				return null;
+			}
+			return "Cooldown: " + Math.round(m.player.getCooledAttackStrength(0.0F) * 100.0F) + "%";
+		}
+
+		int color(Minecraft m) {
+			return m.player != null && m.player.getCooledAttackStrength(0.0F) >= 1.0F ? 0xFF55FF55 : HUD_COLOR;
+		}
+	}
+
+	// ------------------------- Movement -------------------------
+
+	/** Keeps you sprinting while you hold forward. */
+	private static class ToggleSprint extends MeteorModule {
+		ToggleSprint() {
+			super("Toggle Sprint", "Sprints automatically while moving forward.", Category.MOVEMENT);
+		}
+
+		public void onRender() {
+			Minecraft m = mc();
+			if (m.player == null) {
+				return;
+			}
+			if (m.gameSettings.keyBindForward.isKeyDown() && !m.player.isSneaking()
+					&& !m.player.isCollidedHorizontally && m.player.getFoodStats().getFoodLevel() > 6) {
+				m.player.setSprinting(true);
+			}
+		}
+	}
+
+	/** Shows whether you are sprinting, sneaking or walking. */
+	private static class SprintStatus extends HudText {
+		SprintStatus() {
+			super("Sprint Status", "Shows sprint / sneak state.", Category.MOVEMENT);
+		}
+
+		String text(Minecraft m) {
+			if (m.player == null) {
+				return null;
+			}
+			if (m.player.isSneaking()) {
+				return "[Sneaking]";
+			}
+			return m.player.isSprinting() ? "[Sprinting]" : "[Walking]";
+		}
+	}
+
+	/** Horizontal speed in blocks per second. */
+	private static class SpeedDisplay extends HudText {
+		private double lastX;
+		private double lastZ;
+		private long lastTime;
+		private double speed;
+		private boolean init;
+
+		SpeedDisplay() {
+			super("Speed", "Shows your speed in blocks per second.", Category.MOVEMENT);
+		}
+
+		String text(Minecraft m) {
+			if (m.player == null) {
+				return null;
+			}
+			long now = Minecraft.getSystemTime();
+			if (!init) {
+				lastX = m.player.posX;
+				lastZ = m.player.posZ;
+				lastTime = now;
+				init = true;
+			}
+			if (now - lastTime >= 500L) {
+				double dx = m.player.posX - lastX;
+				double dz = m.player.posZ - lastZ;
+				speed = Math.sqrt(dx * dx + dz * dz) / ((now - lastTime) / 1000.0D);
+				lastX = m.player.posX;
+				lastZ = m.player.posZ;
+				lastTime = now;
+			}
+			return "Speed: " + one(speed) + " b/s";
+		}
+	}
+
+	/** Blocks walked since you switched it on. */
+	private static class DistanceTraveled extends HudText {
+		private double lastX;
+		private double lastZ;
+		private double total;
+		private boolean init;
+
+		DistanceTraveled() {
+			super("Distance Traveled", "Counts blocks you have moved.", Category.MOVEMENT);
+		}
+
+		protected void onEnable() {
+			total = 0.0D;
+			init = false;
+		}
+
+		String text(Minecraft m) {
+			if (m.player == null) {
+				return null;
+			}
+			if (init) {
+				double dx = m.player.posX - lastX;
+				double dz = m.player.posZ - lastZ;
+				double d = Math.sqrt(dx * dx + dz * dz);
+				if (d < 20.0D) {
+					total += d;
+				}
+			}
+			lastX = m.player.posX;
+			lastZ = m.player.posZ;
+			init = true;
+			return "Moved: " + (int) total + " m";
+		}
+	}
+
+	/** How far you have fallen. */
+	private static class FallDistance extends HudText {
+		FallDistance() {
+			super("Fall Distance", "Shows how far you are falling.", Category.MOVEMENT);
+		}
+
+		String text(Minecraft m) {
+			return m.player == null ? null : "Fall: " + one(m.player.fallDistance);
 		}
 	}
 }
