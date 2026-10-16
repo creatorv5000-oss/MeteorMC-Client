@@ -291,7 +291,7 @@ public class GuiMainMenu extends GuiScreen {
 		}
 
 		if (button.id == 21) {
-			this.mc.displayGuiScreen(new GuiCredits(this));
+			this.mc.displayGuiScreen(new GuiCredits(this, "/assets/eagler/credits.txt"));
 		}
 
 		if (button.id == 14) {
