@@ -1,0 +1,44 @@
+name: Build MeteorMC (WASM)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make scripts executable
+        run: chmod +x ./gradlew ./CompileEPK.sh ./wasm_gc_teavm/*.sh
+
+      - name: Compile assets (EPK)
+        run: ./CompileEPK.sh
+
+      - name: Compile WASM
+        working-directory: wasm_gc_teavm
+        run: ./CompileWASM.sh
+
+      - name: Bundle WASM client
+        working-directory: wasm_gc_teavm
+        run: ./MakeWASMClientBundle.sh
+
+      - name: Show where the outputs landed
+        run: find . \( -name "*.epw" -o -name "classes.wasm" \) | head -20
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: MeteorMC-wasm
+          path: javascript_dist/
+          if-no-files-found: warn
