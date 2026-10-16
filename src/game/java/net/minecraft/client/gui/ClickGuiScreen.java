@@ -36,41 +36,41 @@ public class ClickGuiScreen extends GuiScreen {
 	// ===================== STYLE =====================
 	private static final String TITLE = "MeteorMC";
 
-	private static final int WIN_W = 480;
-	private static final int WIN_H = 270;
-	private static final int SB_W = 104;
-	private static final int ROW_H = 16;
-	private static final int COLS = 3;
-	private static final int GAP = 6;
-	private static final int CARD_H = 46;
-	private static final int SEARCH_W = 90;
+	private static final int WIN_W = 900;
+	private static final int WIN_H = 440;
+	private static final int SB_W = 165;
+	private static final int ROW_H = 22;
+	private static final int COLS = 2;
+	private static final int GAP = 9;
+	private static final int CARD_H = 62;
+	private static final int SEARCH_W = 180;
 
-	private static final int BG_TOP = 0xFF0B0A06;
-	private static final int BG_BOTTOM = 0xFF2E2208;
+	private static final int BG_TOP = 0xFF171819;
+	private static final int BG_BOTTOM = 0xFF292B2D;
 
-	private static final int BORDER = 0xFF7A6422;
-	private static final int BORDER_HOVER = 0xFFFFC21F;
-	private static final int CARD_BORDER = 0xFF3A3322;
-	private static final int CARD_TOP = 0xF0241D0D;
-	private static final int CARD_BOTTOM = 0xF0171207;
-	private static final int CARD_HOVER_TOP = 0xF03A2E10;
-	private static final int CARD_HOVER_BOTTOM = 0xF0241C0A;
+	private static final int BORDER = 0xFF686B6E;
+	private static final int BORDER_HOVER = 0xFFBFC2C5;
+	private static final int CARD_BORDER = 0xFF55585B;
+	private static final int CARD_TOP = 0xF05B5E61;
+	private static final int CARD_BOTTOM = 0xF047494B;
+	private static final int CARD_HOVER_TOP = 0xF06A6D70;
+	private static final int CARD_HOVER_BOTTOM = 0xF0525558;
 
-	private static final int GOLD = 0xFFFFD83A;
-	private static final int TEXT = 0xFFF2EAD0;
-	private static final int TEXT_DIM = 0xFF9A9070;
+	private static final int GOLD = 0xFFF1F2F3;
+	private static final int TEXT = 0xFFF4F4F4;
+	private static final int TEXT_DIM = 0xFFC4C6C8;
 
-	private static final int TITLE_COLOR_A = 0xFFFFB020;
-	private static final int TITLE_COLOR_B = 0xFFFFF8C0;
-	private static final int TITLE_AURA = 0xFF6A00;
+	private static final int TITLE_COLOR_A = 0xFFE6E8EA;
+	private static final int TITLE_COLOR_B = 0xFFFFFFFF;
+	private static final int TITLE_AURA = 0x70777B;
 
-	private static final int METEOR_OUTER = 0xFFFF8A1A;
-	private static final int METEOR_CORE = 0xFFFFF4A0;
-	private static final int FLAME_HEAD = 0xE0FFB020;
-	private static final int FLAME_TAIL = 0x20A02000;
+	private static final int METEOR_OUTER = 0xFFBFC2C5;
+	private static final int METEOR_CORE = 0xFFFFFFFF;
+	private static final int FLAME_HEAD = 0xE0D7DADD;
+	private static final int FLAME_TAIL = 0x203A3C3E;
 
-	private static final int STAR_COUNT = 90;
-	private static final int METEOR_COUNT = 4;
+	private static final int STAR_COUNT = 45;
+	private static final int METEOR_COUNT = 2;
 
 	private static final String[] GEAR = { "#..##..#", ".######.", "..#..#..", "###..###", "###..###", "..#..#..",
 			".######.", "#..##..#" };
