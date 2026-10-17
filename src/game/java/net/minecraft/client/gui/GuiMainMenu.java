@@ -90,22 +90,22 @@ public class GuiMainMenu extends GuiScreen {
 
 	// ===================== METEORMC STYLE =====================
 	/** false = animated space background, true = original panorama. */
-	private static final boolean USE_PANORAMA = false;
+	private static final boolean USE_PANORAMA = true;
 
 	private static final String TITLE = "MeteorMC";
 	private static final float TITLE_SCALE = 5.0F;
 
-	private static final int BG_TOP = 0xFF0B0A06;
-	private static final int BG_BOTTOM = 0xFF2E2208;
+	private static final int BG_TOP = 0xFF5F86AE;
+	private static final int BG_BOTTOM = 0xFFCFE3F5;
 
-	private static final int TITLE_COLOR_A = 0xFFFFB020;
-	private static final int TITLE_COLOR_B = 0xFFFFF8C0;
-	private static final int TITLE_AURA = 0xFF6A00;
+	private static final int TITLE_COLOR_A = 0xFFEAF6FF;
+	private static final int TITLE_COLOR_B = 0xFFFFFFFF;
+	private static final int TITLE_AURA = 0x4FA8FF;
 
-	private static final int METEOR_OUTER = 0xFFFF8A1A;
-	private static final int METEOR_CORE = 0xFFFFF4A0;
-	private static final int FLAME_HEAD = 0xE0FFB020;
-	private static final int FLAME_TAIL = 0x20A02000;
+	private static final int METEOR_OUTER = 0xFFBEE3FF;
+	private static final int METEOR_CORE = 0xFFFFFFFF;
+	private static final int FLAME_HEAD = 0xE0BEE3FF;
+	private static final int FLAME_TAIL = 0x20FFFFFF;
 
 	private static final int STAR_COUNT = 90;
 	private static final int METEOR_COUNT = 4;
@@ -209,13 +209,14 @@ public class GuiMainMenu extends GuiScreen {
 		int y = this.menuTop();
 		boolean demo = this.mc.isDemo();
 
-		this.buttonList.add(new GuiMeteorButton(demo ? 11 : 2, colX, y, colW, 28, demo ? "PLAY DEMO" : "MULTIPLAYER",
-				GuiMeteorButton.Style.PRIMARY, GuiMeteorButton.ICON_METEOR));
-		y += 34;
+		this.buttonList.add(new GuiMeteorButton(demo ? 11 : 1, colX, y, colW, 20,
+				demo ? "Play Demo" : I18n.format("menu.singleplayer"), GuiMeteorButton.Style.GLASS,
+				GuiMeteorButton.ICON_PERSON));
+		y += 24;
 
 		if (demo) {
 			this.buttonResetDemo = this.addButton(new GuiMeteorButton(12, colX, y, colW, 20,
-					I18n.format("menu.resetdemo"), GuiMeteorButton.Style.ROW, GuiMeteorButton.ICON_PERSON));
+					I18n.format("menu.resetdemo"), GuiMeteorButton.Style.GLASS, GuiMeteorButton.ICON_GLOBE));
 			ISaveFormat isaveformat = this.mc.getSaveLoader();
 			WorldInfo worldinfo = isaveformat.getWorldInfo("Demo_World");
 
@@ -223,24 +224,26 @@ public class GuiMainMenu extends GuiScreen {
 				this.buttonResetDemo.enabled = false;
 			}
 		} else {
-			this.buttonList.add(new GuiMeteorButton(1, colX, y, colW, 20, I18n.format("menu.singleplayer"),
-					GuiMeteorButton.Style.ROW, GuiMeteorButton.ICON_PERSON));
+			this.buttonList.add(new GuiMeteorButton(2, colX, y, colW, 20, I18n.format("menu.multiplayer"),
+					GuiMeteorButton.Style.GLASS, GuiMeteorButton.ICON_GLOBE));
 		}
 		y += 24;
 		this.buttonList.add(new GuiMeteorButton(20, colX, y, colW, 20, "Mods & Client Settings",
-				GuiMeteorButton.Style.ROW, GuiMeteorButton.ICON_GRID));
+				GuiMeteorButton.Style.GLASS, GuiMeteorButton.ICON_GRID));
 		y += 24;
 		this.buttonList.add(new GuiMeteorButton(0, colX, y, colW, 20, I18n.format("menu.options"),
-				GuiMeteorButton.Style.ROW, GuiMeteorButton.ICON_GEAR));
+				GuiMeteorButton.Style.GLASS, GuiMeteorButton.ICON_GEAR));
 		y += 24;
-		this.buttonList.add(new GuiMeteorButton(21, colX, y, colW, 20, "Credits", GuiMeteorButton.Style.ROW,
+		this.buttonList.add(new GuiMeteorButton(21, colX, y, colW, 20, "Credits", GuiMeteorButton.Style.GLASS,
 				GuiMeteorButton.ICON_STAR));
 		y += 30;
-		this.buttonList.add(new GuiMeteorButton(4, colX, y, 20, 20, "Edit Profile", GuiMeteorButton.Style.ICON,
+
+		int ix = colX + (colW - 70) / 2;
+		this.buttonList.add(new GuiMeteorButton(4, ix, y, 20, 20, "Edit Profile", GuiMeteorButton.Style.ICON,
 				GuiMeteorButton.ICON_PERSON));
-		this.buttonList.add(new GuiMeteorButton(5, colX + 25, y, 20, 20, "Language", GuiMeteorButton.Style.ICON,
+		this.buttonList.add(new GuiMeteorButton(5, ix + 25, y, 20, 20, "Language", GuiMeteorButton.Style.ICON,
 				GuiMeteorButton.ICON_GLOBE));
-		this.buttonList.add(new GuiMeteorButton(14, colX + 50, y, 20, 20, "Eaglercraft Credits",
+		this.buttonList.add(new GuiMeteorButton(14, ix + 50, y, 20, 20, "Eaglercraft Credits",
 				GuiMeteorButton.Style.ICON, GuiMeteorButton.ICON_INFO));
 	}
 
@@ -513,33 +516,23 @@ public class GuiMainMenu extends GuiScreen {
 	 * Draws the screen and all the components in it.
 	 */
 	public void drawScreen(int mouseX, int mouseY, float partialTicks) {
-		this.panoramaTimer += partialTicks;
 		long now = Minecraft.getSystemTime();
-
-		if (USE_PANORAMA) {
-			GlStateManager.disableAlpha();
-			this.renderSkybox(mouseX, mouseY, partialTicks);
-			GlStateManager.enableAlpha();
-			this.drawGradientRect(0, 0, this.width, this.height, -2130706433, 16777215);
-			this.drawGradientRect(0, 0, this.width, this.height, 0, Integer.MIN_VALUE);
-		} else {
-			this.drawSpaceBackground(now);
-		}
+		this.drawMenuBackground(mouseX, mouseY, partialTicks);
 
 		GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
 		if (MeteorModuleManager.menuEmbers()) {
-			this.drawLeftEmbers(now);
+			MeteorModuleManager.drawSnow(this.width, this.height, now);
 		}
-		this.drawLeftTitle(now);
+		this.drawCenterTitle(now);
 
 		GlStateManager.pushMatrix();
-		GlStateManager.translate((float) (this.menuLeft() + 200), 46.0F, 0.0F);
+		GlStateManager.translate((float) (this.width / 2 + 100), (float) (this.titleTop() + 34), 0.0F);
 		GlStateManager.rotate(-20.0F, 0.0F, 0.0F, 1.0F);
 		float f = 1.8F - MathHelper.abs(
 				MathHelper.sin((float) (Minecraft.getSystemTime() % 1000L) / 1000.0F * ((float) Math.PI * 2F)) * 0.1F);
 		f = f * 100.0F / (float) (this.fontRendererObj.getStringWidth(this.splashText) + 32);
 		GlStateManager.scale(f, f, f);
-		this.drawCenteredString(this.fontRendererObj, this.splashText, 0, -8, -256);
+		this.drawCenteredString(this.fontRendererObj, this.splashText, 0, -8, 0xFF1E88E5);
 		GlStateManager.popMatrix();
 		String s = "Minecraft 1.12.2";
 
@@ -547,61 +540,70 @@ public class GuiMainMenu extends GuiScreen {
 			s = s + " Demo";
 		}
 
-		this.drawString(this.fontRendererObj, s, 2, this.height - 20, -1);
+		this.drawString(this.fontRendererObj, s, 2, this.height - 20, 0xFF1E2A38);
 		this.drawString(this.fontRendererObj, "Eaglercraft 1.12.2 (" + EaglercraftVersion.projectOriginVersion + ")", 2,
-				this.height - 10, -1);
+				this.height - 10, 0xFF1E2A38);
 		this.drawString(this.fontRendererObj, "Resources copyright Mojang AB", this.field_193979_N, this.height - 10,
-				-1);
+				0xFF1E2A38);
 
-		this.menuFrames++;
-		if (now - this.menuFpsLast >= 1000L) {
-			this.menuFps = this.menuFrames;
-			this.menuFrames = 0;
-			this.menuFpsLast = now;
-		}
-		this.drawMeteorCard(now);
 		super.drawScreen(mouseX, mouseY, partialTicks);
 		this.drawIconTooltip(mouseX, mouseY);
 	}
 
-	// ------------------------- Ranked-style layout -------------------------
+	// ------------------------- Glass (Feather-style) layout -------------------------
 
-	private static final int MM_GOLD = 0xFFFFD83A;
-	private static final int MM_TEXT = 0xFFF2EAD0;
-	private static final int MM_DIM = 0xFF9A9070;
-
-	private int menuFrames;
-	private int menuFps;
-	private long menuFpsLast = Minecraft.getSystemTime();
-
-	private int menuLeft() {
-		return Math.max(14, this.width / 16);
-	}
+	private static final int MM_TEXT = 0xFF1E2A38;
 
 	private int menuWidth() {
-		return Math.min(210, Math.max(150, this.width / 3));
+		return Math.min(200, Math.max(120, this.width - 40));
+	}
+
+	private int menuLeft() {
+		return (this.width - this.menuWidth()) / 2;
+	}
+
+	/** Top of the logo. The logo and the buttons together are centered on screen. */
+	private int titleTop() {
+		return Math.max(8, (this.height - 234) / 2);
 	}
 
 	private int menuTop() {
-		int t = Math.max(88, (int) (this.height * 0.4F));
-		return Math.max(70, Math.min(t, this.height - 180));
+		return this.titleTop() + 84;
 	}
 
-	/** Big glowing left-aligned title with a CLIENT subtitle. */
-	private void drawLeftTitle(long now) {
+	/**
+	 * Draws only the menu background (panorama or space). The ClickGUI and the
+	 * credits screen call this too, so they can be see-through over the menu.
+	 */
+	void drawMenuBackground(int mouseX, int mouseY, float partialTicks) {
+		this.panoramaTimer += partialTicks;
+		if (USE_PANORAMA) {
+			GlStateManager.disableAlpha();
+			this.renderSkybox(mouseX, mouseY, partialTicks);
+			GlStateManager.enableAlpha();
+			this.drawGradientRect(0, 0, this.width, this.height, -2130706433, 16777215);
+			this.drawGradientRect(0, 0, this.width, this.height, 0x00FFFFFF, 0x60FFFFFF);
+		} else {
+			this.drawSpaceBackground(Minecraft.getSystemTime());
+		}
+	}
+
+	/** Big glowing centered title with a CLIENT subtitle. */
+	private void drawCenterTitle(long now) {
 		String title = "MeteorMC";
 		int len = title.length();
 		float sweep = ((now % 2600L) / 2600.0F) * (len + 6) - 3.0F;
-		int x0 = this.menuLeft();
+		int top = this.titleTop();
+		int total = this.fontRendererObj.getStringWidth(title);
 
 		GlStateManager.pushMatrix();
-		GlStateManager.translate((float) x0, 14.0F, 0.0F);
+		GlStateManager.translate((float) (this.width / 2), (float) top, 0.0F);
 		GlStateManager.scale(4.0F, 4.0F, 1.0F);
 		GlStateManager.enableBlend();
 		GlStateManager.tryBlendFuncSeparate(RealOpenGLEnums.GL_SRC_ALPHA, RealOpenGLEnums.GL_ONE_MINUS_SRC_ALPHA,
 				RealOpenGLEnums.GL_ONE, RealOpenGLEnums.GL_ZERO);
 
-		int x = 0;
+		int x = -total / 2;
 		for (int i = 0; i < len; ++i) {
 			String s = String.valueOf(title.charAt(i));
 			int cw = this.fontRendererObj.getStringWidth(s);
@@ -623,107 +625,11 @@ public class GuiMainMenu extends GuiScreen {
 		GlStateManager.popMatrix();
 
 		GlStateManager.pushMatrix();
-		GlStateManager.translate((float) (x0 + 2), 54.0F, 0.0F);
-		GlStateManager.scale(2.0F, 2.0F, 1.0F);
-		this.fontRendererObj.drawString("CLIENT", 0.0F, 0.0F, 0xFFFFF8C0, true);
+		GlStateManager.translate((float) (this.width / 2), (float) (top + 40), 0.0F);
+		GlStateManager.scale(1.5F, 1.5F, 1.0F);
+		this.fontRendererObj.drawString("CLIENT", (float) (-this.fontRendererObj.getStringWidth("CLIENT") / 2), 0.0F,
+				0xFFDDEFFF, true);
 		GlStateManager.popMatrix();
-	}
-
-	/** Sparks rising around the title. */
-	private void drawLeftEmbers(long now) {
-		int x0 = this.menuLeft();
-		for (int k = 0; k < 16; ++k) {
-			float life = ((now + k * 397L) % 2000L) / 2000.0F;
-			int x = x0 + (k * 37) % 190 + (int) (Math.sin(life * 6.0F + k) * 4.0D);
-			int y = 66 - (int) (life * 56.0F);
-			int a = (int) ((1.0F - life) * 255.0F);
-			int size = (k % 3 == 0) ? 2 : 1;
-			int rgb = lerpColor(0xFFFFE680, 0xFFFF6A00, life) & 0xFFFFFF;
-			Gui.drawRect(x, y, x + size, y + size, (a << 24) | rgb);
-		}
-	}
-
-	/** Info card on the right: client status, a flaming meteor, and a mods bar. */
-	private void drawMeteorCard(long now) {
-		if (this.width < 520) {
-			return;
-		}
-		int cw = 150;
-		int ch = 178;
-		int cx0 = this.width - cw - 24;
-		int cy0 = 24;
-
-		Gui.drawRect(cx0 - 1, cy0 - 1, cx0 + cw + 1, cy0 + ch + 1, 0xFF7A6422);
-		this.drawGradientRect(cx0, cy0, cx0 + cw, cy0 + ch, 0xF0181309, 0xF00E0B05);
-
-		this.drawString(this.fontRendererObj, "MeteorMC", cx0 + 8, cy0 + 7, MM_GOLD);
-		String ver = "v1.0";
-		this.drawString(this.fontRendererObj, ver, cx0 + cw - 8 - this.fontRendererObj.getStringWidth(ver), cy0 + 7,
-				MM_DIM);
-		Gui.drawRect(cx0 + 8, cy0 + 20, cx0 + 11, cy0 + 23, 0xFF55FF55);
-		this.drawString(this.fontRendererObj, "READY", cx0 + 15, cy0 + 18, 0xFF55FF55);
-		Gui.drawRect(cx0, cy0 + 32, cx0 + cw, cy0 + 33, 0xFF3A3322);
-
-		// Art box with a flaming meteor
-		int ax = cx0 + 8;
-		int ay = cy0 + 38;
-		int aw = cw - 16;
-		int ah = 86;
-		Gui.drawRect(ax - 1, ay - 1, ax + aw + 1, ay + ah + 1, 0xFF2A220C);
-		Gui.drawRect(ax, ay, ax + aw, ay + ah, 0xFF0A0804);
-		for (int i = 0; i < 14; ++i) {
-			int sx = ax + 4 + (i * 53) % (aw - 8);
-			int sy = ay + 4 + (i * 29) % (ah - 8);
-			int a = (int) (80.0D + 120.0D * (0.5D + 0.5D * Math.sin(now * 0.003D + i * 1.7D)));
-			Gui.drawRect(sx, sy, sx + 1, sy + 1, (a << 24) | 0xFFF0C0);
-		}
-		this.drawBigMeteor(ax, ay, aw, ah, ax + aw * 35 / 100, ay + ah * 66 / 100, now);
-
-		// Mods enabled bar
-		int total = 0;
-		int on = 0;
-		for (MeteorModule m : MeteorModuleManager.getModules()) {
-			total++;
-			if (m.isEnabled()) {
-				on++;
-			}
-		}
-		this.drawString(this.fontRendererObj, "MODS ENABLED", cx0 + 8, cy0 + 132, MM_GOLD);
-		String count = on + " / " + total;
-		this.drawString(this.fontRendererObj, count, cx0 + cw - 8 - this.fontRendererObj.getStringWidth(count),
-				cy0 + 132, MM_TEXT);
-		int bx = cx0 + 8;
-		int bw = cw - 16;
-		Gui.drawRect(bx, cy0 + 145, bx + bw, cy0 + 149, 0xFF2A220C);
-		Gui.drawRect(bx, cy0 + 145, bx + (total == 0 ? 0 : bw * on / total), cy0 + 149, 0xFFFFC21F);
-		this.drawString(this.fontRendererObj, "FPS: " + this.menuFps, cx0 + 8, cy0 + 157, MM_DIM);
-	}
-
-	private void drawBigMeteor(int ax, int ay, int aw, int ah, int hx, int hy, long now) {
-		for (int i = 14; i >= 0; --i) {
-			int size = Math.max(3, 16 - i);
-			int jx = (int) (((now / 90L) + i * 5L) % 3L) - 1;
-			int jy = (int) (((now / 70L) + i * 3L) % 3L) - 1;
-			int x = hx + 6 + i * 5 + jx;
-			int y = hy - 4 - i * 3 + jy;
-			int left = x - size / 2;
-			int top = y - size / 2;
-			if (left < ax || top < ay || left + size > ax + aw || top + size > ay + ah) {
-				continue;
-			}
-			Gui.drawRect(left, top, left + size, top + size, lerpColor(FLAME_HEAD, FLAME_TAIL, i / 14.0F));
-		}
-		int pulse = ((now / 120L) % 2L == 0L) ? 0 : 1;
-		this.drawDisc(hx, hy, 11, METEOR_OUTER);
-		this.drawDisc(hx, hy, 8, 0xFFFFC21F);
-		this.drawDisc(hx, hy, 4 + pulse, METEOR_CORE);
-	}
-
-	private void drawDisc(int cx, int cy, int r, int color) {
-		for (int dy = -r; dy <= r; ++dy) {
-			int dx = (int) Math.sqrt((double) (r * r - dy * dy));
-			Gui.drawRect(cx - dx, cy + dy, cx + dx + 1, cy + dy + 1, color);
-		}
 	}
 
 	/** Shows the name of the small icon button the mouse is over. */
@@ -733,8 +639,8 @@ public class GuiMainMenu extends GuiScreen {
 				int tw = this.fontRendererObj.getStringWidth(b.displayString);
 				int tx = Math.min(mouseX + 8, this.width - tw - 8);
 				int ty = mouseY + 10;
-				Gui.drawRect(tx - 4, ty - 3, tx + tw + 4, ty + 11, 0xFF7A6422);
-				Gui.drawRect(tx - 3, ty - 2, tx + tw + 3, ty + 10, 0xFF0E0B05);
+				Gui.drawRect(tx - 4, ty - 3, tx + tw + 4, ty + 11, 0xFF4FA3E0);
+				Gui.drawRect(tx - 3, ty - 2, tx + tw + 3, ty + 10, 0xF2FFFFFF);
 				this.drawString(this.fontRendererObj, b.displayString, tx, ty, MM_TEXT);
 			}
 		}
@@ -769,7 +675,7 @@ public class GuiMainMenu extends GuiScreen {
 			int a = (int) (90.0D + 110.0D * (0.5D + 0.5D * Math.sin(now * 0.003D + i * 1.7D)));
 			int sz = this.starSize[i];
 			Gui.drawRect(this.starX[i], this.starY[i], this.starX[i] + sz, this.starY[i] + sz,
-					(a << 24) | 0xFFF0C0);
+					(a << 24) | 0xFFFFFF);
 		}
 
 		for (int m = 0; MeteorModuleManager.menuMeteors() && m < METEOR_COUNT; ++m) {
@@ -790,7 +696,7 @@ public class GuiMainMenu extends GuiScreen {
 			Gui.drawRect(hx - 1, hy - 1, hx + 2, hy + 2, withAlpha(METEOR_CORE, fade));
 		}
 
-		this.drawGradientRect(0, 0, this.width, this.height, 0x00000000, 0xA0000000);
+		this.drawGradientRect(0, 0, this.width, this.height, 0x00FFFFFF, 0x30FFFFFF);
 	}
 
 	/** Small sparks rising around the title, fading as they go. */
