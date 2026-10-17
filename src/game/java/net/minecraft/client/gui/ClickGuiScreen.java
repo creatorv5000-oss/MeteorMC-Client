@@ -33,751 +33,354 @@ import net.minecraft.util.StringUtils;
  */
 public class ClickGuiScreen extends GuiScreen {
 
-	// ===================== STYLE =====================
-	private static final String TITLE = "MeteorMC";
-
-	private static final int WIN_W = 480;
-	private static final int WIN_H = 270;
-	private static final int SB_W = 104;
-	private static final int ROW_H = 16;
-	private static final int COLS = 3;
-	private static final int GAP = 6;
-	private static final int CARD_H = 46;
-	private static final int SEARCH_W = 90;
-
-	private static final int BG_TOP = 0xFF5F86AE;
-	private static final int BG_BOTTOM = 0xFFCFE3F5;
-
-	private static final int BORDER = 0xFFA9C7E4;
-	private static final int BORDER_HOVER = 0xFF2F8FE0;
-	private static final int CARD_BORDER = 0xA0AFC2D6;
-	private static final int CARD_TOP = 0x98FFFFFF;
-	private static final int CARD_BOTTOM = 0x78EAF4FF;
-	private static final int CARD_HOVER_TOP = 0xB8FFFFFF;
-	private static final int CARD_HOVER_BOTTOM = 0xA0DCEEFF;
-
-	private static final int GOLD = 0xFF1E88E5;
-	private static final int TEXT = 0xFF1E2A38;
-	private static final int TEXT_DIM = 0xFF5F7388;
-
-	private static final int TITLE_COLOR_A = 0xFF1976D2;
-	private static final int TITLE_COLOR_B = 0xFF9ED0FF;
-	private static final int TITLE_AURA = 0xFFFFFF;
-
-	private static final int METEOR_OUTER = 0xFFBEE3FF;
-	private static final int METEOR_CORE = 0xFFFFFFFF;
-	private static final int FLAME_HEAD = 0xE0BEE3FF;
-	private static final int FLAME_TAIL = 0x20FFFFFF;
-
-	private static final int STAR_COUNT = 90;
-	private static final int METEOR_COUNT = 4;
-
-	private static final String[] GEAR = { "#..##..#", ".######.", "..#..#..", "###..###", "###..###", "..#..#..",
-			".######.", "#..##..#" };
-	// =================================================
-
-	private static final int KEY_ESCAPE = 1;
-	private static final int KEY_BACKSPACE = 14;
-	private static final int KEY_UP = 200;
-	private static final int KEY_DOWN = 208;
-
-	/** Options on the Settings page. */
-	private static final MeteorSetting TOOLTIPS = MeteorSetting.bool("Tooltips", true);
-	private static final MeteorSetting HEADER_GLOW = MeteorSetting.bool("Header Glow", true);
-
-	/** Remembered between openings. */
-	private static int selectedTab = 0;
-	private static int scrollRow = 0;
-	private static boolean settingsPage = false;
-	private static final Map<Object, Float> ANIM = new HashMap<Object, Float>();
-
-	private final GuiScreen parent;
-	private final List<MeteorModule.Category> tabs = new ArrayList<MeteorModule.Category>();
-
-	private String search = "";
-	private MeteorModule settingsModule;
-	private MeteorSetting draggingSetting;
-	private int sliderX;
-	private int sliderW;
-	private boolean draggingScroll;
-
-	private String tooltip;
-	private int tooltipX;
-	private int tooltipY;
-
-	private int winX;
-	private int winY;
-	private int winW;
-	private int winH;
-
-	private int[] starX;
-	private int[] starY;
-	private int[] starSize;
-
-	public ClickGuiScreen() {
-		this(null);
-	}
-
-	public ClickGuiScreen(GuiScreen parent) {
-		this.parent = parent;
-		for (MeteorModule.Category c : MeteorModule.Category.values()) {
-			if (!MeteorModuleManager.getModules(c).isEmpty()) {
-				this.tabs.add(c);
-			}
-		}
-		if (selectedTab > this.tabs.size()) {
-			selectedTab = 0;
-		}
-	}
-
-	public void initGui() {
-		this.generateStars();
-	}
-
-	public boolean doesGuiPauseGame() {
-		return false;
-	}
-
-	// ------------------------- Layout -------------------------
-
-	private void layout() {
-		this.winW = Math.min(WIN_W, this.width - 20);
-		this.winH = Math.min(WIN_H, this.height - 20);
-		this.winX = (this.width - this.winW) / 2;
-		this.winY = (this.height - this.winH) / 2;
-	}
-
-	private int mainX() {
-		return this.winX + SB_W + 10;
-	}
-
-	private int mainW() {
-		return this.winW - SB_W - 20;
-	}
-
-	private int contentY() {
-		return this.winY + 38;
-	}
-
-	private int contentH() {
-		return this.winH - 38 - 10;
-	}
-
-	private int gridW() {
-		return this.mainW() - 8;
-	}
-
-	private int cardW() {
-		return (this.gridW() - GAP * (COLS - 1)) / COLS;
-	}
-
-	private int visibleRows() {
-		return Math.max(1, (this.contentH() + GAP) / (CARD_H + GAP));
-	}
-
-	private int searchX() {
-		return this.winX + this.winW - 10 - SEARCH_W;
-	}
-
-	private int sbRowY(int i) {
-		return this.winY + 40 + i * ROW_H;
-	}
-
-	private int settingsRowY() {
-		return this.sbRowY(this.tabs.size() + 1) + 10;
-	}
-
-	private boolean inDone(int mx, int my) {
-		return inside(mx, my, this.winX + 8, this.winY + this.winH - 26, SB_W - 16, 18);
-	}
-
-	private String tabLabel(int i) {
-		return i == 0 ? "All" : this.tabs.get(i - 1).getLabel();
-	}
-
-	private String pageTitle() {
-		if (this.settingsModule != null) {
-			return this.settingsModule.getName();
-		}
-		if (settingsPage) {
-			return "Settings";
-		}
-		return selectedTab == 0 ? "All Mods" : this.tabLabel(selectedTab);
-	}
-
-	private List<MeteorModule> filtered() {
-		List<MeteorModule> out = new ArrayList<MeteorModule>();
-		String q = this.search.toLowerCase();
-		for (MeteorModule m : MeteorModuleManager.getModules()) {
-			if (selectedTab > 0 && m.getCategory() != this.tabs.get(selectedTab - 1)) {
-				continue;
-			}
-			if (!q.isEmpty() && !m.getName().toLowerCase().contains(q)) {
-				continue;
-			}
-			out.add(m);
-		}
-		return out;
-	}
-
-	private List<MeteorSetting> settingsPageList() {
-		List<MeteorSetting> list = new ArrayList<MeteorSetting>(MeteorModuleManager.menuEffectSettings());
-		list.add(TOOLTIPS);
-		list.add(HEADER_GLOW);
-		return list;
-	}
-
-	private static int rowHeight(MeteorSetting s) {
-		return s.getType() == MeteorSetting.Type.BOOLEAN ? 24 : 32;
-	}
-
-	private String fit(String s, int maxW) {
-		if (this.fontRendererObj.getStringWidth(s) <= maxW) {
-			return s;
-		}
-		while (s.length() > 1 && this.fontRendererObj.getStringWidth(s + "..") > maxW) {
-			s = s.substring(0, s.length() - 1);
-		}
-		return s + "..";
-	}
-
-	// ------------------------- Drawing -------------------------
-
-	public void drawScreen(int mouseX, int mouseY, float partialTicks) {
-		this.layout();
-		long now = Minecraft.getSystemTime();
-
-		this.drawBackdrop(mouseX, mouseY, partialTicks, now);
-		this.tooltip = null;
-		this.drawWindow(mouseX, mouseY, now);
-
-		super.drawScreen(mouseX, mouseY, partialTicks);
-
-		if (this.tooltip != null && TOOLTIPS.getBoolean()) {
-			int tw = this.fontRendererObj.getStringWidth(this.tooltip);
-			int tx = Math.min(this.tooltipX + 8, this.width - tw - 8);
-			int ty = this.tooltipY + 10;
-			Gui.drawRect(tx - 4, ty - 3, tx + tw + 4, ty + 11, BORDER_HOVER);
-			Gui.drawRect(tx - 3, ty - 2, tx + tw + 3, ty + 10, 0xF2FFFFFF);
-			this.drawString(this.fontRendererObj, this.tooltip, tx, ty, TEXT);
-		}
-	}
-
-	/**
-	 * See-through backdrop: the menu panorama behind the main menu, or the game
-	 * world itself when you open this in-game.
-	 */
-	private void drawBackdrop(int mouseX, int mouseY, float partialTicks, long now) {
-		if (this.parent instanceof GuiMainMenu) {
-			((GuiMainMenu) this.parent).drawMenuBackground(mouseX, mouseY, partialTicks);
-			this.drawGradientRect(0, 0, this.width, this.height, 0x30FFFFFF, 0x50DCEBFA);
-		} else if (this.mc.world != null) {
-			this.drawGradientRect(0, 0, this.width, this.height, 0x28FFFFFF, 0x50E6F0FA);
-		} else {
-			this.drawSpaceBackground(now);
-		}
-		if (MeteorModuleManager.menuEmbers()) {
-			MeteorModuleManager.drawSnow(this.width, this.height, now);
-		}
-	}
-
-	private void drawWindow(int mouseX, int mouseY, long now) {
-		Gui.drawRect(this.winX - 1, this.winY - 1, this.winX + this.winW + 1, this.winY + this.winH + 1, BORDER);
-		this.drawGradientRect(this.winX, this.winY, this.winX + this.winW, this.winY + this.winH, 0xA8F4F9FF,
-				0x98DCEBFA);
-
-		// Sidebar
-		Gui.drawRect(this.winX, this.winY, this.winX + SB_W, this.winY + this.winH, 0x38FFFFFF);
-		Gui.drawRect(this.winX + SB_W, this.winY, this.winX + SB_W + 1, this.winY + this.winH, CARD_BORDER);
-		this.drawHeaderTitle(now);
-		Gui.drawRect(this.winX + 8, this.winY + 32, this.winX + SB_W - 8, this.winY + 33, CARD_BORDER);
-
-		for (int i = 0; i <= this.tabs.size(); ++i) {
-			this.drawSidebarRow(this.tabLabel(i), this.sbRowY(i), !settingsPage && i == selectedTab, mouseX, mouseY);
-		}
-		int sepY = this.sbRowY(this.tabs.size() + 1) + 4;
-		Gui.drawRect(this.winX + 8, sepY, this.winX + SB_W - 8, sepY + 1, CARD_BORDER);
-		this.drawSidebarRow("Settings", this.settingsRowY(), settingsPage, mouseX, mouseY);
-
-		boolean doneHover = this.inDone(mouseX, mouseY);
-		int dx = this.winX + 8;
-		int dy = this.winY + this.winH - 26;
-		Gui.drawRect(dx, dy, dx + SB_W - 16, dy + 18, doneHover ? BORDER_HOVER : BORDER);
-		this.drawGradientRect(dx + 1, dy + 1, dx + SB_W - 17, dy + 17, doneHover ? CARD_HOVER_TOP : CARD_TOP,
-				doneHover ? CARD_HOVER_BOTTOM : CARD_BOTTOM);
-		this.drawCenteredString(this.fontRendererObj, "Done", dx + (SB_W - 16) / 2, dy + 5, doneHover ? GOLD : TEXT);
-
-		// Main header: page title + search box
-		GlStateManager.pushMatrix();
-		GlStateManager.translate((float) this.mainX(), (float) (this.winY + 10), 0.0F);
-		GlStateManager.scale(1.3F, 1.3F, 1.0F);
-		this.fontRendererObj.drawString(this.fit(this.pageTitle(), 120), 0.0F, 0.0F, TEXT, false);
-		GlStateManager.popMatrix();
-
-		int sx = this.searchX();
-		int sy = this.winY + 8;
-		boolean sHover = inside(mouseX, mouseY, sx, sy, SEARCH_W, 14);
-		Gui.drawRect(sx, sy, sx + SEARCH_W, sy + 14, (sHover || !this.search.isEmpty()) ? BORDER_HOVER : BORDER);
-		Gui.drawRect(sx + 1, sy + 1, sx + SEARCH_W - 1, sy + 13, 0xB0FFFFFF);
-		if (this.search.isEmpty()) {
-			this.drawString(this.fontRendererObj, "Search", sx + 5, sy + 3, TEXT_DIM);
-		} else {
-			String caret = ((now / 500L) % 2L == 0L) ? "_" : "";
-			this.drawString(this.fontRendererObj, this.search + caret, sx + 5, sy + 3, TEXT);
-		}
-		Gui.drawRect(this.mainX() - 2, this.winY + 32, this.winX + this.winW - 8, this.winY + 33, CARD_BORDER);
-
-		if (settingsPage) {
-			this.drawSettingRows(this.settingsPageList(), this.mainX(), this.contentY(), this.mainW(), mouseX, mouseY);
-		} else if (this.settingsModule != null) {
-			this.drawModuleSettings(mouseX, mouseY);
-		} else {
-			this.drawGrid(mouseX, mouseY);
-		}
-	}
-
-	private void drawSidebarRow(String label, int y, boolean selected, int mouseX, int mouseY) {
-		boolean hover = inside(mouseX, mouseY, this.winX + 4, y, SB_W - 8, ROW_H);
-		if (selected) {
-			Gui.drawRect(this.winX + 4, y, this.winX + SB_W - 4, y + ROW_H, 0x402F8FE0);
-			Gui.drawRect(this.winX + 4, y, this.winX + 6, y + ROW_H, GOLD);
-		} else if (hover) {
-			Gui.drawRect(this.winX + 4, y, this.winX + SB_W - 4, y + ROW_H, 0x18000000);
-		}
-		this.drawString(this.fontRendererObj, label, this.winX + 14, y + 4,
-				selected ? GOLD : (hover ? TEXT : TEXT_DIM));
-	}
-
-	private void drawGrid(int mouseX, int mouseY) {
-		List<MeteorModule> list = this.filtered();
-		int rows = (list.size() + COLS - 1) / COLS;
-		int vis = this.visibleRows();
-		int maxScroll = Math.max(0, rows - vis);
-		scrollRow = Math.max(0, Math.min(maxScroll, scrollRow));
-
-		if (list.isEmpty()) {
-			this.drawCenteredString(this.fontRendererObj, "No modules found", this.mainX() + this.mainW() / 2,
-					this.winY + this.winH / 2, TEXT_DIM);
-		}
-
-		int cw = this.cardW();
-		int start = scrollRow * COLS;
-		int end = Math.min(list.size(), (scrollRow + vis) * COLS);
-		for (int i = start; i < end; ++i) {
-			int r = i / COLS - scrollRow;
-			int c = i % COLS;
-			int x = this.mainX() + c * (cw + GAP);
-			int y = this.contentY() + r * (CARD_H + GAP);
-			this.drawCard(list.get(i), x, y, cw, mouseX, mouseY);
-		}
-
-		int sx = this.mainX() + this.gridW() + 2;
-		int sy = this.contentY();
-		int sh = this.contentH();
-		Gui.drawRect(sx, sy, sx + 4, sy + sh, 0x30000000);
-		if (rows > vis) {
-			int th = Math.max(16, sh * vis / rows);
-			int ty = sy + (maxScroll == 0 ? 0 : (sh - th) * scrollRow / maxScroll);
-			Gui.drawRect(sx, ty, sx + 4, ty + th, GOLD);
-		}
-	}
-
-	private void drawCard(MeteorModule m, int x, int y, int cw, int mouseX, int mouseY) {
-		boolean hover = inside(mouseX, mouseY, x, y, cw, CARD_H);
-		boolean on = m.isEnabled();
-		int border = on ? BORDER_HOVER : (hover ? BORDER : CARD_BORDER);
-		Gui.drawRect(x, y, x + cw, y + CARD_H, border);
-		this.drawGradientRect(x + 1, y + 1, x + cw - 1, y + CARD_H - 1, hover ? CARD_HOVER_TOP : CARD_TOP,
-				hover ? CARD_HOVER_BOTTOM : CARD_BOTTOM);
-
-		this.drawString(this.fontRendererObj, this.fit(m.getName(), cw - 14), x + 7, y + 7, on ? TEXT : 0xFF3A4D60);
-
-		boolean hasSettings = !m.getSettings().isEmpty();
-		boolean gearHover = hasSettings && inside(mouseX, mouseY, x + 5, y + CARD_H - 16, 12, 12);
-		this.drawGear(x + 7, y + CARD_H - 14, hasSettings ? (gearHover ? GOLD : TEXT_DIM) : 0xFFB8C4D0);
-		this.drawBadge(m, on, x + cw - 31, y + CARD_H - 16);
-
-		if (hover) {
-			this.tooltip = m.getDescription();
-			this.tooltipX = mouseX;
-			this.tooltipY = mouseY;
-		}
-	}
-
-	private void drawGear(int px, int py, int color) {
-		for (int r = 0; r < GEAR.length; ++r) {
-			for (int c = 0; c < GEAR[r].length(); ++c) {
-				if (GEAR[r].charAt(c) == '#') {
-					Gui.drawRect(px + c, py + r, px + c + 1, py + r + 1, color);
-				}
-			}
-		}
-	}
-
-	/** Animated ON / OFF badge. */
-	private void drawBadge(Object key, boolean on, int bx, int by) {
-		float t = this.anim(key, on);
-		int bg = lerpColor(0xFFD9E4EE, 0xFF3D9BE9, t);
-		int bd = lerpColor(0xFFB8C7D6, 0xFF1E88E5, t);
-		Gui.drawRect(bx, by, bx + 26, by + 11, bd);
-		Gui.drawRect(bx + 1, by + 1, bx + 25, by + 10, bg);
-		String s = on ? "ON" : "OFF";
-		int tw = this.fontRendererObj.getStringWidth(s);
-		this.drawString(this.fontRendererObj, s, bx + (26 - tw) / 2, by + 2, on ? 0xFFFFFFFF : TEXT_DIM);
-	}
-
-	private float anim(Object key, boolean on) {
-		float target = on ? 1.0F : 0.0F;
-		Float f = ANIM.get(key);
-		float cur = f == null ? target : f.floatValue();
-		cur += (target - cur) * 0.35F;
-		ANIM.put(key, Float.valueOf(cur));
-		return cur;
-	}
-
-	private void drawModuleSettings(int mouseX, int mouseY) {
-		int x = this.mainX();
-		int y = this.contentY();
-
-		boolean hb = inside(mouseX, mouseY, x, y, 44, 14);
-		Gui.drawRect(x, y, x + 44, y + 14, hb ? BORDER_HOVER : BORDER);
-		this.drawGradientRect(x + 1, y + 1, x + 43, y + 13, hb ? CARD_HOVER_TOP : CARD_TOP,
-				hb ? CARD_HOVER_BOTTOM : CARD_BOTTOM);
-		this.drawCenteredString(this.fontRendererObj, "< Back", x + 22, y + 3, hb ? GOLD : TEXT);
-		this.drawString(this.fontRendererObj, this.settingsModule.getDescription(), x + 54, y + 3, TEXT_DIM);
-
-		this.drawSettingRows(this.settingsModule.getSettings(), x, y + 22, this.mainW(), mouseX, mouseY);
-	}
-
-	private void drawSettingRows(List<MeteorSetting> list, int x, int y, int w, int mouseX, int mouseY) {
-		int ry = y;
-		for (MeteorSetting s : list) {
-			int rh = rowHeight(s);
-			boolean hover = inside(mouseX, mouseY, x, ry, w, rh);
-			Gui.drawRect(x, ry, x + w, ry + rh, hover ? BORDER : CARD_BORDER);
-			this.drawGradientRect(x + 1, ry + 1, x + w - 1, ry + rh - 1, hover ? CARD_HOVER_TOP : CARD_TOP,
-					hover ? CARD_HOVER_BOTTOM : CARD_BOTTOM);
-
-			if (s.getType() == MeteorSetting.Type.BOOLEAN) {
-				this.drawString(this.fontRendererObj, s.getName(), x + 8, ry + (rh - 8) / 2, TEXT);
-				this.drawBadge(s, s.getBoolean(), x + w - 34, ry + (rh - 11) / 2);
-			} else {
-				this.drawString(this.fontRendererObj, s.getName() + ": " + fmt(s.getDouble()), x + 8, ry + 5, TEXT);
-				int tx0 = x + 8;
-				int tw = w - 16;
-				double t = (s.getDouble() - s.getMin()) / (s.getMax() - s.getMin());
-				int fx = tx0 + (int) (tw * t);
-				Gui.drawRect(tx0, ry + rh - 11, tx0 + tw, ry + rh - 8, 0xFFC9D6E3);
-				Gui.drawRect(tx0, ry + rh - 11, fx, ry + rh - 8, GOLD);
-				Gui.drawRect(fx - 1, ry + rh - 13, fx + 2, ry + rh - 6, 0xFF0D47A1);
-			}
-			ry += rh + GAP;
-		}
-	}
-
-	/** Small animated glowing title at the top of the sidebar. */
-	private void drawHeaderTitle(long now) {
-		float scale = 1.5F;
-		int len = TITLE.length();
-
-		GlStateManager.pushMatrix();
-		GlStateManager.translate((float) (this.winX + 10), (float) (this.winY + 10), 0.0F);
-		GlStateManager.scale(scale, scale, 1.0F);
-		GlStateManager.enableBlend();
-		GlStateManager.tryBlendFuncSeparate(RealOpenGLEnums.GL_SRC_ALPHA, RealOpenGLEnums.GL_ONE_MINUS_SRC_ALPHA,
-				RealOpenGLEnums.GL_ONE, RealOpenGLEnums.GL_ZERO);
-
-		if (!HEADER_GLOW.getBoolean()) {
-			this.fontRendererObj.drawString(TITLE, 0.0F, 0.0F, GOLD, true);
-			GlStateManager.popMatrix();
-			return;
-		}
-
-		float sweep = ((now % 2600L) / 2600.0F) * (len + 6) - 3.0F;
-		int x = 0;
-		for (int i = 0; i < len; ++i) {
-			String s = String.valueOf(TITLE.charAt(i));
-			int cw = this.fontRendererObj.getStringWidth(s);
-			float bob = (float) Math.sin(now * 0.006D + i * 0.7D) * 0.5F;
-			float glow = Math.max(0.0F, 1.0F - Math.abs(i - sweep) / 2.5F);
-
-			int auraAlpha = (int) (60.0F + 90.0F * glow);
-			int auraColor = (auraAlpha << 24) | TITLE_AURA;
-			this.fontRendererObj.drawString(s, (float) x - 0.5F, bob, auraColor, false);
-			this.fontRendererObj.drawString(s, (float) x + 0.5F, bob, auraColor, false);
-			this.fontRendererObj.drawString(s, (float) x, bob - 0.5F, auraColor, false);
-			this.fontRendererObj.drawString(s, (float) x, bob + 0.5F, auraColor, false);
-
-			int rgb = lerpColor(TITLE_COLOR_A, TITLE_COLOR_B, glow) & 0xFFFFFF;
-			this.fontRendererObj.drawString(s, (float) x, bob, 0xFF000000 | rgb, true);
-			x += cw;
-		}
-		GlStateManager.popMatrix();
-	}
-
-	// ------------------------- Input -------------------------
-
-	protected void mouseClicked(int mouseX, int mouseY, int button) throws IOException {
-		super.mouseClicked(mouseX, mouseY, button);
-		this.layout();
-
-		if (button != 0 && button != 1) {
-			return;
-		}
-
-		// Sidebar
-		if (button == 0) {
-			for (int i = 0; i <= this.tabs.size(); ++i) {
-				if (inside(mouseX, mouseY, this.winX + 4, this.sbRowY(i), SB_W - 8, ROW_H)) {
-					selectedTab = i;
-					scrollRow = 0;
-					settingsPage = false;
-					this.settingsModule = null;
-					return;
-				}
-			}
-			if (inside(mouseX, mouseY, this.winX + 4, this.settingsRowY(), SB_W - 8, ROW_H)) {
-				settingsPage = true;
-				this.settingsModule = null;
-				return;
-			}
-			if (this.inDone(mouseX, mouseY)) {
-				this.mc.displayGuiScreen(this.parent);
-				return;
-			}
-		}
-
-		if (settingsPage) {
-			if (button == 0) {
-				this.clickSettingRows(this.settingsPageList(), this.mainX(), this.contentY(), this.mainW(), mouseX,
-						mouseY);
-			}
-			return;
-		}
-
-		if (this.settingsModule != null) {
-			if (button == 0) {
-				if (inside(mouseX, mouseY, this.mainX(), this.contentY(), 44, 14)) {
-					this.settingsModule = null;
-				} else {
-					this.clickSettingRows(this.settingsModule.getSettings(), this.mainX(), this.contentY() + 22,
-							this.mainW(), mouseX, mouseY);
-				}
-			}
-			return;
-		}
-
-		List<MeteorModule> list = this.filtered();
-		int rows = (list.size() + COLS - 1) / COLS;
-		int vis = this.visibleRows();
-
-		// Scrollbar
-		if (button == 0 && rows > vis
-				&& inside(mouseX, mouseY, this.mainX() + this.gridW(), this.contentY(), 10, this.contentH())) {
-			this.draggingScroll = true;
-			this.updateScroll(mouseY);
-			return;
-		}
-
-		// Cards
-		int cw = this.cardW();
-		int start = scrollRow * COLS;
-		int end = Math.min(list.size(), (scrollRow + vis) * COLS);
-		for (int i = start; i < end; ++i) {
-			int r = i / COLS - scrollRow;
-			int c = i % COLS;
-			int x = this.mainX() + c * (cw + GAP);
-			int y = this.contentY() + r * (CARD_H + GAP);
-			if (inside(mouseX, mouseY, x, y, cw, CARD_H)) {
-				MeteorModule m = list.get(i);
-				boolean hasSettings = !m.getSettings().isEmpty();
-				if (button == 1) {
-					if (hasSettings) {
-						this.settingsModule = m;
-					}
-				} else if (hasSettings && inside(mouseX, mouseY, x + 5, y + CARD_H - 16, 12, 12)) {
-					this.settingsModule = m;
-				} else {
-					m.toggle();
-				}
-				return;
-			}
-		}
-	}
-
-	private void clickSettingRows(List<MeteorSetting> list, int x, int y, int w, int mouseX, int mouseY) {
-		int ry = y;
-		for (MeteorSetting s : list) {
-			int rh = rowHeight(s);
-			if (inside(mouseX, mouseY, x, ry, w, rh)) {
-				if (s.getType() == MeteorSetting.Type.BOOLEAN) {
-					s.toggle();
-				} else {
-					this.draggingSetting = s;
-					this.sliderX = x + 8;
-					this.sliderW = w - 16;
-					this.updateSlider(mouseX);
-				}
-				return;
-			}
-			ry += rh + GAP;
-		}
-	}
-
-	protected void mouseClickMove(int mouseX, int mouseY, int clickedMouseButton, long timeSinceLastClick) {
-		super.mouseClickMove(mouseX, mouseY, clickedMouseButton, timeSinceLastClick);
-		if (this.draggingScroll) {
-			this.updateScroll(mouseY);
-		}
-		if (this.draggingSetting != null) {
-			this.updateSlider(mouseX);
-		}
-	}
-
-	protected void mouseReleased(int mouseX, int mouseY, int state) {
-		super.mouseReleased(mouseX, mouseY, state);
-		this.draggingScroll = false;
-		this.draggingSetting = null;
-	}
-
-	protected void keyTyped(char typedChar, int keyCode) throws IOException {
-		if (keyCode == KEY_ESCAPE) {
-			if (this.settingsModule != null) {
-				this.settingsModule = null;
-			} else if (settingsPage) {
-				settingsPage = false;
-			} else if (!this.search.isEmpty()) {
-				this.search = "";
-				scrollRow = 0;
-			} else {
-				this.mc.displayGuiScreen(this.parent);
-			}
-			return;
-		}
-
-		boolean gridShown = this.settingsModule == null && !settingsPage;
-		if (!gridShown) {
-			return;
-		}
-
-		if (keyCode == KEY_UP || keyCode == KEY_DOWN) {
-			scrollRow = Math.max(0, scrollRow + (keyCode == KEY_DOWN ? 1 : -1));
-			return;
-		}
-		if (keyCode == KEY_BACKSPACE) {
-			if (!this.search.isEmpty()) {
-				this.search = this.search.substring(0, this.search.length() - 1);
-				scrollRow = 0;
-			}
-			return;
-		}
-		if (typedChar >= 32 && typedChar != 127 && this.fontRendererObj.getStringWidth(this.search) < SEARCH_W - 20) {
-			this.search += typedChar;
-			scrollRow = 0;
-		}
-	}
-
-	private void updateSlider(int mouseX) {
-		double t = (mouseX - this.sliderX) / (double) this.sliderW;
-		t = Math.max(0.0D, Math.min(1.0D, t));
-		this.draggingSetting.setValue(
-				this.draggingSetting.getMin() + t * (this.draggingSetting.getMax() - this.draggingSetting.getMin()));
-	}
-
-	private void updateScroll(int mouseY) {
-		List<MeteorModule> list = this.filtered();
-		int rows = (list.size() + COLS - 1) / COLS;
-		int vis = this.visibleRows();
-		int maxScroll = Math.max(0, rows - vis);
-		int sh = this.contentH();
-		int th = Math.max(16, sh * vis / Math.max(1, rows));
-		double t = (mouseY - this.contentY() - th / 2) / (double) Math.max(1, sh - th);
-		t = Math.max(0.0D, Math.min(1.0D, t));
-		scrollRow = (int) Math.round(t * maxScroll);
-	}
-
-	// ------------------------- Background -------------------------
-
-	private void generateStars() {
-		this.starX = new int[STAR_COUNT];
-		this.starY = new int[STAR_COUNT];
-		this.starSize = new int[STAR_COUNT];
-		long seed = 424242L;
-		int w = Math.max(1, this.width);
-		int h = Math.max(1, this.height);
-		for (int i = 0; i < STAR_COUNT; ++i) {
-			seed = seed * 6364136223846793005L + 1442695040888963407L;
-			this.starX[i] = (int) ((seed >>> 33) % w);
-			seed = seed * 6364136223846793005L + 1442695040888963407L;
-			this.starY[i] = (int) ((seed >>> 33) % h);
-			seed = seed * 6364136223846793005L + 1442695040888963407L;
-			this.starSize[i] = ((seed >>> 40) % 5L == 0L) ? 2 : 1;
-		}
-	}
-
-	private void drawSpaceBackground(long now) {
-		this.drawGradientRect(0, 0, this.width, this.height, BG_TOP, BG_BOTTOM);
-
-		if (this.starX == null) {
-			this.generateStars();
-		}
-
-		if (MeteorModuleManager.menuStars()) {
-			for (int i = 0; i < STAR_COUNT; ++i) {
-				int a = (int) (90.0D + 110.0D * (0.5D + 0.5D * Math.sin(now * 0.003D + i * 1.7D)));
-				int sz = this.starSize[i];
-				Gui.drawRect(this.starX[i], this.starY[i], this.starX[i] + sz, this.starY[i] + sz,
-						(a << 24) | 0xFFFFFF);
-			}
-		}
-
-		if (MeteorModuleManager.menuMeteors()) {
-			for (int m = 0; m < METEOR_COUNT; ++m) {
-				float phase = ((now + m * 1900L) % 7600L) / 7600.0F;
-				float fade = Math.min(1.0F, Math.min(phase * 10.0F, (1.0F - phase) * 10.0F));
-				int sx = (int) (this.width * (0.45F + 0.55F * (((m * 53) % 100) / 100.0F)));
-				int hx = sx - (int) (phase * this.width * 0.75F);
-				int hy = -10 + (int) (phase * (this.height * 0.8F));
-
-				for (int i = 11; i >= 0; --i) {
-					int size = Math.max(1, 4 - i / 3);
-					int tx = hx + i * 4;
-					int ty = hy - i * 2;
-					int c = withAlpha(lerpColor(FLAME_HEAD, FLAME_TAIL, i / 11.0F), fade);
-					Gui.drawRect(tx, ty, tx + size, ty + size, c);
-				}
-				Gui.drawRect(hx - 2, hy - 2, hx + 3, hy + 3, withAlpha(METEOR_OUTER, fade));
-				Gui.drawRect(hx - 1, hy - 1, hx + 2, hy + 2, withAlpha(METEOR_CORE, fade));
-			}
-		}
-
-		this.drawGradientRect(0, 0, this.width, this.height, 0x00FFFFFF, 0x30FFFFFF);
-	}
-
-	// ------------------------- Helpers -------------------------
-
-	private static boolean inside(int mx, int my, int x, int y, int w, int h) {
-		return mx >= x && my >= y && mx < x + w && my < y + h;
-	}
-
-	private static String fmt(double v) {
-		return String.valueOf(Math.round(v * 100.0D) / 100.0D);
-	}
-
-	private static int withAlpha(int color, float factor) {
-		int a = (int) (((color >>> 24) & 255) * factor);
-		return (a << 24) | (color & 0xFFFFFF);
-	}
-
-	private static int lerpColor(int a, int b, float t) {
-		int aa = (a >>> 24) & 255, ar = (a >>> 16) & 255, ag = (a >>> 8) & 255, ab = a & 255;
-		int ba = (b >>> 24) & 255, br = (b >>> 16) & 255, bg = (b >>> 8) & 255, bb = b & 255;
-		int ra = aa + (int) ((ba - aa) * t);
-		int rr = ar + (int) ((br - ar) * t);
-		int rg = ag + (int) ((bg - ag) * t);
-		int rb = ab + (int) ((bb - ab) * t);
-		return (ra << 24) | (rr << 16) | (rg << 8) | rb;
-	}
+    private static final int PANEL_W = 620;
+    private static final int PANEL_H = 310;
+    private static final int SIDEBAR_W = 124;
+    private static final int CARD_H = 50;
+    private static final int GAP = 7;
+    private static final int WHITE = 0xFFF2F2F2;
+    private static final int MUTED = 0xFFBDBDBD;
+    private static final int PANEL = 0xE85A5C5E;
+    private static final int CARD = 0xB84B4D4F;
+    private static final int CARD_HOVER = 0xD05C5E60;
+    private static final int BORDER = 0x507F8183;
+    private static final int SELECTED = 0xB5A6A8AA;
+    private static final int SWITCH_ON = 0xFFF5F5F5;
+    private static final int SWITCH_OFF = 0xFF929496;
+
+    private static int selectedTab = 0;
+    private static int scrollRow = 0;
+    private final GuiScreen parent;
+    private String search = "";
+    private boolean searchFocused;
+    private MeteorModule settingsModule;
+    private int winX, winY, winW, winH;
+    private int contentX, contentY, contentW, contentH;
+    private static final String[] TABS = { "All", "HUD", "GUI", "PVP", "FPS", "Misc" };
+    private static final String[] SIDEBAR = { "Home", "Modules", "Cosmetics", "Profiles", "Edit HUD", "Settings" };
+
+    public ClickGuiScreen() {
+        this(null);
+    }
+
+    public ClickGuiScreen(GuiScreen parent) {
+        this.parent = parent;
+    }
+
+    public void initGui() {
+        this.searchFocused = false;
+    }
+
+    public boolean doesGuiPauseGame() {
+        return false;
+    }
+
+    private void layout() {
+        this.winW = Math.min(PANEL_W, this.width - 24);
+        this.winH = Math.min(PANEL_H, this.height - 24);
+        this.winX = (this.width - this.winW) / 2;
+        this.winY = (this.height - this.winH) / 2;
+        this.contentX = this.winX + SIDEBAR_W + 12;
+        this.contentY = this.winY + 56;
+        this.contentW = this.winW - SIDEBAR_W - 24;
+        this.contentH = this.winH - 68;
+    }
+
+    private static boolean inside(int mx, int my, int x, int y, int w, int h) {
+        return mx >= x && my >= y && mx < x + w && my < y + h;
+    }
+
+    private List<MeteorModule> filtered() {
+        List<MeteorModule> out = new ArrayList<MeteorModule>();
+        String q = this.search.toLowerCase();
+        for (MeteorModule m : MeteorModuleManager.getModules()) {
+            if (selectedTab == 1 && m.getCategory() != MeteorModule.Category.HUD) continue;
+            if (selectedTab == 2 && m.getCategory() != MeteorModule.Category.VISUAL) continue;
+            if (selectedTab == 3 && m.getCategory() != MeteorModule.Category.COMBAT) continue;
+            if (selectedTab == 4 && m.getCategory() != MeteorModule.Category.PERFORMANCE) continue;
+            if (selectedTab == 5 && m.getCategory() != MeteorModule.Category.MISC
+                    && m.getCategory() != MeteorModule.Category.MOVEMENT) continue;
+            if (!q.isEmpty() && !m.getName().toLowerCase().contains(q)
+                    && !m.getDescription().toLowerCase().contains(q)) continue;
+            out.add(m);
+        }
+        return out;
+    }
+
+    public void drawScreen(int mouseX, int mouseY, float partialTicks) {
+        this.layout();
+        this.drawGradientRect(0, 0, this.width, this.height, 0xB8000000, 0xD9000000);
+
+        // Main translucent grey panel.
+        Gui.drawRect(this.winX, this.winY, this.winX + this.winW, this.winY + this.winH, PANEL);
+        Gui.drawRect(this.winX, this.winY, this.winX + this.winW, this.winY + 1, 0x507F7F7F);
+        Gui.drawRect(this.winX, this.winY + this.winH - 1, this.winX + this.winW, this.winY + this.winH, 0x407F7F7F);
+
+        // Sidebar and separator.
+        Gui.drawRect(this.winX, this.winY, this.winX + SIDEBAR_W, this.winY + this.winH, 0x1CFFFFFF);
+        Gui.drawRect(this.winX + SIDEBAR_W, this.winY + 12, this.winX + SIDEBAR_W + 1,
+                this.winY + this.winH - 12, BORDER);
+        this.drawCenteredString(this.fontRendererObj, "\u2726 R E F L E X",
+                this.winX + SIDEBAR_W / 2, this.winY + 17, WHITE);
+
+        int[] sideYs = { this.winY + 48, this.winY + 68, this.winY + 88,
+                this.winY + 108, this.winY + 128, this.winY + this.winH - 34 };
+        for (int i = 0; i < SIDEBAR.length; i++) {
+            int y = sideYs[i];
+            boolean active = (i == 1 && this.settingsModule == null);
+            boolean hover = inside(mouseX, mouseY, this.winX + 8, y - 3, SIDEBAR_W - 16, 17);
+            if (active) {
+                Gui.drawRect(this.winX + 8, y - 3, this.winX + SIDEBAR_W - 8, y + 14, SELECTED);
+            } else if (hover) {
+                Gui.drawRect(this.winX + 8, y - 3, this.winX + SIDEBAR_W - 8, y + 14, 0x247F7F7F);
+            }
+            this.drawString(this.fontRendererObj, SIDEBAR[i], this.winX + 17, y + 1,
+                    active ? WHITE : (hover ? WHITE : 0xFFD7D7D7));
+        }
+
+        // Search bar.
+        int searchX = this.contentX;
+        int searchY = this.winY + 15;
+        int searchW = Math.max(105, this.contentW - 285);
+        Gui.drawRect(searchX, searchY, searchX + searchW, searchY + 23,
+                this.searchFocused ? 0xD0444648 : 0xB9444648);
+        Gui.drawRect(searchX, searchY, searchX + searchW, searchY + 1, BORDER);
+        this.drawString(this.fontRendererObj, "\u2315", searchX + 9, searchY + 7, MUTED);
+        String shownSearch = this.search.isEmpty() ? "Search modules..." : this.search;
+        if (this.searchFocused && (Minecraft.getSystemTime() / 500L) % 2L == 0L) shownSearch += "_";
+        this.drawString(this.fontRendererObj, shownSearch, searchX + 25, searchY + 7,
+                this.search.isEmpty() ? MUTED : WHITE);
+
+        // Category pills.
+        int tabX = searchX + searchW + 6;
+        int tabGap = 4;
+        int available = this.winX + this.winW - 12 - tabX;
+        int tabW = Math.max(28, (available - tabGap * (TABS.length - 1)) / TABS.length);
+        for (int i = 0; i < TABS.length; i++) {
+            int x = tabX + i * (tabW + tabGap);
+            boolean active = selectedTab == i;
+            boolean hover = inside(mouseX, mouseY, x, searchY, tabW, 23);
+            Gui.drawRect(x, searchY, x + tabW, searchY + 23,
+                    active ? 0xD4A8AAAC : (hover ? 0x9A77797B : 0x604F5153));
+            Gui.drawRect(x, searchY, x + tabW, searchY + 1, BORDER);
+            this.drawCenteredString(this.fontRendererObj, TABS[i], x + tabW / 2, searchY + 7,
+                    active ? WHITE : 0xFFE1E1E1);
+        }
+
+        if (this.settingsModule != null) {
+            this.drawModuleSettings(mouseX, mouseY);
+        } else {
+            this.drawModuleGrid(mouseX, mouseY);
+        }
+        super.drawScreen(mouseX, mouseY, partialTicks);
+    }
+
+    private void drawModuleGrid(int mouseX, int mouseY) {
+        List<MeteorModule> modules = this.filtered();
+        int cols = 2;
+        int cardW = (this.contentW - 8) / cols;
+        int rows = (modules.size() + cols - 1) / cols;
+        int visibleRows = Math.max(1, (this.contentH + GAP) / (CARD_H + GAP));
+        int maxScroll = Math.max(0, rows - visibleRows);
+        scrollRow = Math.max(0, Math.min(scrollRow, maxScroll));
+
+        if (modules.isEmpty()) {
+            this.drawCenteredString(this.fontRendererObj, "No modules found",
+                    this.contentX + this.contentW / 2, this.contentY + 20, MUTED);
+            return;
+        }
+
+        int first = scrollRow * cols;
+        int last = Math.min(modules.size(), (scrollRow + visibleRows) * cols);
+        for (int i = first; i < last; i++) {
+            int row = i / cols - scrollRow;
+            int col = i % cols;
+            int x = this.contentX + col * (cardW + GAP);
+            int y = this.contentY + row * (CARD_H + GAP);
+            MeteorModule module = modules.get(i);
+            boolean hover = inside(mouseX, mouseY, x, y, cardW, CARD_H);
+            Gui.drawRect(x, y, x + cardW, y + CARD_H, hover ? CARD_HOVER : CARD);
+            Gui.drawRect(x, y, x + cardW, y + 1, module.isEnabled() ? 0xD0EEEEEE : BORDER);
+            this.drawString(this.fontRendererObj, trim(module.getName(), cardW - 52), x + 9, y + 7, WHITE);
+            this.drawString(this.fontRendererObj, trim(module.getDescription(), cardW - 18),
+                    x + 9, y + 27, 0xFFD0D0D0);
+
+            // Gear/settings affordance.
+            boolean hasSettings = !module.getSettings().isEmpty();
+            this.drawString(this.fontRendererObj, "\u2699", x + cardW - 32, y + 7,
+                    hasSettings ? 0xFFE0E0E0 : 0xFF8A8A8A);
+
+            // Toggle switch.
+            int sx = x + cardW - 49;
+            int sy = y + 25;
+            Gui.drawRect(sx, sy, sx + 28, sy + 13, module.isEnabled() ? SWITCH_ON : SWITCH_OFF);
+            Gui.drawRect(sx + 1, sy + 1, sx + 27, sy + 12, module.isEnabled() ? 0xFFF7F7F7 : 0xFF77797B);
+            int knobX = module.isEnabled() ? sx + 16 : sx + 3;
+            Gui.drawRect(knobX, sy + 2, knobX + 9, sy + 11, module.isEnabled() ? 0xFF202124 : 0xFFF4F4F4);
+        }
+
+        if (rows > visibleRows) {
+            int barX = this.contentX + this.contentW - 3;
+            Gui.drawRect(barX, this.contentY, barX + 3, this.contentY + this.contentH, 0x44303030);
+            int thumbH = Math.max(18, this.contentH * visibleRows / rows);
+            int thumbY = this.contentY + (this.contentH - thumbH) * scrollRow / Math.max(1, maxScroll);
+            Gui.drawRect(barX, thumbY, barX + 3, thumbY + thumbH, 0xFFD0D0D0);
+        }
+    }
+
+    private void drawModuleSettings(int mouseX, int mouseY) {
+        int x = this.contentX;
+        int y = this.contentY;
+        Gui.drawRect(x, y, x + this.contentW, y + 24, CARD);
+        this.drawString(this.fontRendererObj, "< Back", x + 8, y + 8, WHITE);
+        this.drawString(this.fontRendererObj, this.settingsModule.getName(), x + 62, y + 8, WHITE);
+        y += 32;
+        for (MeteorSetting setting : this.settingsModule.getSettings()) {
+            int h = setting.getType() == MeteorSetting.Type.BOOLEAN ? 23 : 34;
+            boolean hover = inside(mouseX, mouseY, x, y, this.contentW, h);
+            Gui.drawRect(x, y, x + this.contentW, y + h, hover ? CARD_HOVER : CARD);
+            this.drawString(this.fontRendererObj, setting.getName(), x + 8, y + 7, WHITE);
+            if (setting.getType() == MeteorSetting.Type.BOOLEAN) {
+                this.drawString(this.fontRendererObj, setting.getBoolean() ? "ON" : "OFF",
+                        x + this.contentW - 30, y + 7, setting.getBoolean() ? WHITE : MUTED);
+            } else {
+                String value = String.valueOf(Math.round(setting.getDouble() * 100.0D) / 100.0D);
+                this.drawString(this.fontRendererObj, value, x + this.contentW - 42, y + 7, WHITE);
+                int sx = x + 8, sw = this.contentW - 16;
+                double t = (setting.getDouble() - setting.getMin()) / Math.max(0.0001D, setting.getMax() - setting.getMin());
+                Gui.drawRect(sx, y + h - 8, sx + sw, y + h - 5, 0xFF77797B);
+                Gui.drawRect(sx, y + h - 8, sx + (int)(sw * t), y + h - 5, 0xFFE8E8E8);
+            }
+            y += h + 5;
+        }
+    }
+
+    private String trim(String text, int maxWidth) {
+        if (this.fontRendererObj.getStringWidth(text) <= maxWidth) return text;
+        while (text.length() > 1 && this.fontRendererObj.getStringWidth(text + "...") > maxWidth) {
+            text = text.substring(0, text.length() - 1);
+        }
+        return text + "...";
+    }
+
+    protected void mouseClicked(int mouseX, int mouseY, int button) throws IOException {
+        super.mouseClicked(mouseX, mouseY, button);
+        this.layout();
+        if (button != 0) {
+            if (button == 1 && this.settingsModule == null) {
+                this.openModuleAt(mouseX, mouseY, true);
+            }
+            return;
+        }
+
+        int sideY = this.winY + 48;
+        for (int i = 0; i < 5; i++) {
+            if (inside(mouseX, mouseY, this.winX + 8, sideY + i * 20 - 3, SIDEBAR_W - 16, 17)) {
+                if (i == 1) {
+                    this.settingsModule = null;
+                } else if (i == 5) {
+                    this.settingsModule = null;
+                }
+                return;
+            }
+        }
+        if (inside(mouseX, mouseY, this.winX + 8, this.winY + this.winH - 37, SIDEBAR_W - 16, 20)) {
+            this.settingsModule = null;
+            return;
+        }
+
+        int searchX = this.contentX;
+        int searchY = this.winY + 15;
+        int searchW = Math.max(105, this.contentW - 285);
+        this.searchFocused = inside(mouseX, mouseY, searchX, searchY, searchW, 23);
+        int tabX = searchX + searchW + 6;
+        int available = this.winX + this.winW - 12 - tabX;
+        int tabW = Math.max(28, (available - 4 * (TABS.length - 1)) / TABS.length);
+        for (int i = 0; i < TABS.length; i++) {
+            int x = tabX + i * (tabW + 4);
+            if (inside(mouseX, mouseY, x, searchY, tabW, 23)) {
+                selectedTab = i;
+                scrollRow = 0;
+                this.settingsModule = null;
+                return;
+            }
+        }
+
+        if (this.settingsModule != null) {
+            if (inside(mouseX, mouseY, this.contentX, this.contentY, this.contentW, 24)) {
+                this.settingsModule = null;
+                return;
+            }
+            int y = this.contentY + 32;
+            for (MeteorSetting setting : this.settingsModule.getSettings()) {
+                int h = setting.getType() == MeteorSetting.Type.BOOLEAN ? 23 : 34;
+                if (inside(mouseX, mouseY, this.contentX, y, this.contentW, h)) {
+                    if (setting.getType() == MeteorSetting.Type.BOOLEAN) {
+                        setting.toggle();
+                    } else {
+                        double t = (mouseX - this.contentX - 8) / (double)Math.max(1, this.contentW - 16);
+                        t = Math.max(0.0D, Math.min(1.0D, t));
+                        setting.setValue(setting.getMin() + t * (setting.getMax() - setting.getMin()));
+                    }
+                    return;
+                }
+                y += h + 5;
+            }
+            return;
+        }
+        this.openModuleAt(mouseX, mouseY, false);
+    }
+
+    private void openModuleAt(int mouseX, int mouseY, boolean settingsOnly) {
+        List<MeteorModule> modules = this.filtered();
+        int cols = 2;
+        int cardW = (this.contentW - 8) / cols;
+        int visibleRows = Math.max(1, (this.contentH + GAP) / (CARD_H + GAP));
+        int first = scrollRow * cols;
+        int last = Math.min(modules.size(), (scrollRow + visibleRows) * cols);
+        for (int i = first; i < last; i++) {
+            int row = i / cols - scrollRow;
+            int col = i % cols;
+            int x = this.contentX + col * (cardW + GAP);
+            int y = this.contentY + row * (CARD_H + GAP);
+            if (inside(mouseX, mouseY, x, y, cardW, CARD_H)) {
+                MeteorModule module = modules.get(i);
+                boolean gear = mouseX >= x + cardW - 39 && mouseY < y + 24;
+                if ((settingsOnly || gear) && !module.getSettings().isEmpty()) {
+                    this.settingsModule = module;
+                } else if (!settingsOnly) {
+                    module.toggle();
+                }
+                return;
+            }
+        }
+    }
+
+    protected void keyTyped(char typedChar, int keyCode) throws IOException {
+        if (keyCode == 1) {
+            if (this.settingsModule != null) this.settingsModule = null;
+            else this.mc.displayGuiScreen(this.parent);
+            return;
+        }
+        if (!this.searchFocused || this.settingsModule != null) return;
+        if (keyCode == 14) {
+            if (!this.search.isEmpty()) this.search = this.search.substring(0, this.search.length() - 1);
+            scrollRow = 0;
+            return;
+        }
+        if (typedChar >= 32 && typedChar != 127 && this.fontRendererObj.getStringWidth(this.search) < 180) {
+            this.search += typedChar;
+            scrollRow = 0;
+        }
+    }
+
+    public void handleMouseInput() throws IOException {
+        super.handleMouseInput();
+        int wheel = org.lwjgl.input.Mouse.getEventDWheel();
+        if (wheel != 0 && this.settingsModule == null) {
+            scrollRow = Math.max(0, scrollRow + (wheel < 0 ? 1 : -1));
+        }
+    }
 }
 
 /**
