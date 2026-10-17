@@ -6,13 +6,14 @@ import net.minecraft.client.Minecraft;
 /**
  * Main menu button in the MeteorMC style.
  *
+ * GLASS: translucent centered button (used by the main menu).
  * PRIMARY: big gold button. ROW: dark row with an icon and left-aligned text.
  * ICON: small square button with just an icon (its text shows as a tooltip).
  */
 public class GuiMeteorButton extends GuiButton {
 
 	public enum Style {
-		PRIMARY, ROW, ICON
+		PRIMARY, ROW, ICON, GLASS
 	}
 
 	public static final int ICON_NONE = -1;
@@ -81,6 +82,23 @@ public class GuiMeteorButton extends GuiButton {
 			f.drawString(this.displayString, (float) (-f.getStringWidth(this.displayString) / 2), -4.0F, 0xFF2A1800,
 					false);
 			GlStateManager.popMatrix();
+			return;
+		}
+
+		if (this.style == Style.GLASS || this.style == Style.ICON) {
+			int gborder = !on ? 0x40FFFFFF : (hot ? 0xFF4FA3E0 : 0xA0FFFFFF);
+			Gui.drawRect(x0, y0, x1, y1, gborder);
+			this.drawGradientRect(x0 + 1, y0 + 1, x1 - 1, y1 - 1, hot ? 0xC8FFFFFF : 0x98FFFFFF,
+					hot ? 0xB0DCEEFF : 0x70EAF4FF);
+			int gcolor = !on ? 0xFF8A99A8 : (hot ? 0xFF0D47A1 : 0xFF1E2A38);
+			if (this.style == Style.GLASS) {
+				int sw = f.getStringWidth(this.displayString);
+				this.drawIcon(x0 + 8, y0 + (this.height - 8) / 2, 1, gcolor);
+				f.drawString(this.displayString, (float) (x0 + (this.width - sw) / 2),
+						(float) (y0 + (this.height - 8) / 2), gcolor, false);
+			} else {
+				this.drawIcon(x0 + (this.width - 8) / 2, y0 + (this.height - 8) / 2, 1, gcolor);
+			}
 			return;
 		}
 
