@@ -207,15 +207,17 @@ public class GuiMainMenu extends GuiScreen {
 		int colX = this.menuLeft();
 		int colW = this.menuWidth();
 		int y = this.menuTop();
+		int rh = this.rowH();
+		int step = this.rowStep();
 		boolean demo = this.mc.isDemo();
 
-		this.buttonList.add(new GuiMeteorButton(demo ? 11 : 1, colX, y, colW, 20,
+		this.buttonList.add(new GuiMeteorButton(demo ? 11 : 1, colX, y, colW, rh,
 				demo ? "Play Demo" : I18n.format("menu.singleplayer"), GuiMeteorButton.Style.GLASS,
 				GuiMeteorButton.ICON_PERSON));
-		y += 24;
+		y += step;
 
 		if (demo) {
-			this.buttonResetDemo = this.addButton(new GuiMeteorButton(12, colX, y, colW, 20,
+			this.buttonResetDemo = this.addButton(new GuiMeteorButton(12, colX, y, colW, rh,
 					I18n.format("menu.resetdemo"), GuiMeteorButton.Style.GLASS, GuiMeteorButton.ICON_GLOBE));
 			ISaveFormat isaveformat = this.mc.getSaveLoader();
 			WorldInfo worldinfo = isaveformat.getWorldInfo("Demo_World");
@@ -224,26 +226,27 @@ public class GuiMainMenu extends GuiScreen {
 				this.buttonResetDemo.enabled = false;
 			}
 		} else {
-			this.buttonList.add(new GuiMeteorButton(2, colX, y, colW, 20, I18n.format("menu.multiplayer"),
+			this.buttonList.add(new GuiMeteorButton(2, colX, y, colW, rh, I18n.format("menu.multiplayer"),
 					GuiMeteorButton.Style.GLASS, GuiMeteorButton.ICON_GLOBE));
 		}
-		y += 24;
-		this.buttonList.add(new GuiMeteorButton(20, colX, y, colW, 20, "Mods & Client Settings",
+		y += step;
+		this.buttonList.add(new GuiMeteorButton(20, colX, y, colW, rh, "Mods & Client Settings",
 				GuiMeteorButton.Style.GLASS, GuiMeteorButton.ICON_GRID));
-		y += 24;
-		this.buttonList.add(new GuiMeteorButton(0, colX, y, colW, 20, I18n.format("menu.options"),
+		y += step;
+		this.buttonList.add(new GuiMeteorButton(0, colX, y, colW, rh, I18n.format("menu.options"),
 				GuiMeteorButton.Style.GLASS, GuiMeteorButton.ICON_GEAR));
-		y += 24;
-		this.buttonList.add(new GuiMeteorButton(21, colX, y, colW, 20, "Credits", GuiMeteorButton.Style.GLASS,
+		y += step;
+		this.buttonList.add(new GuiMeteorButton(21, colX, y, colW, rh, "Credits", GuiMeteorButton.Style.GLASS,
 				GuiMeteorButton.ICON_STAR));
-		y += 30;
+		y += rh + 8;
 
-		int ix = colX + (colW - 70) / 2;
-		this.buttonList.add(new GuiMeteorButton(4, ix, y, 20, 20, "Edit Profile", GuiMeteorButton.Style.ICON,
+		int ib = rh;
+		int ix = colX + (colW - (3 * ib + 10)) / 2;
+		this.buttonList.add(new GuiMeteorButton(4, ix, y, ib, ib, "Edit Profile", GuiMeteorButton.Style.ICON,
 				GuiMeteorButton.ICON_PERSON));
-		this.buttonList.add(new GuiMeteorButton(5, ix + 25, y, 20, 20, "Language", GuiMeteorButton.Style.ICON,
+		this.buttonList.add(new GuiMeteorButton(5, ix + ib + 5, y, ib, ib, "Language", GuiMeteorButton.Style.ICON,
 				GuiMeteorButton.ICON_GLOBE));
-		this.buttonList.add(new GuiMeteorButton(14, ix + 50, y, 20, 20, "Eaglercraft Credits",
+		this.buttonList.add(new GuiMeteorButton(14, ix + 2 * (ib + 5), y, ib, ib, "Eaglercraft Credits",
 				GuiMeteorButton.Style.ICON, GuiMeteorButton.ICON_INFO));
 	}
 
@@ -562,13 +565,30 @@ public class GuiMainMenu extends GuiScreen {
 		return (this.width - this.menuWidth()) / 2;
 	}
 
+	/** Short screens (GUI scale 4 on a small display) get a tighter layout. */
+	private boolean compact() {
+		return this.height < 244;
+	}
+
+	private int rowH() {
+		return this.compact() ? 18 : 20;
+	}
+
+	private int rowStep() {
+		return this.compact() ? 21 : 24;
+	}
+
+	private float titleScale() {
+		return this.compact() ? 3.0F : 4.0F;
+	}
+
 	/** Top of the logo. The logo and the buttons together are centered on screen. */
 	private int titleTop() {
-		return Math.max(8, (this.height - 234) / 2);
+		return this.compact() ? 6 : Math.max(8, (this.height - 234) / 2);
 	}
 
 	private int menuTop() {
-		return this.titleTop() + 84;
+		return this.titleTop() + (this.compact() ? 50 : 84);
 	}
 
 	/**
@@ -598,7 +618,8 @@ public class GuiMainMenu extends GuiScreen {
 
 		GlStateManager.pushMatrix();
 		GlStateManager.translate((float) (this.width / 2), (float) top, 0.0F);
-		GlStateManager.scale(4.0F, 4.0F, 1.0F);
+		float ts = this.titleScale();
+		GlStateManager.scale(ts, ts, 1.0F);
 		GlStateManager.enableBlend();
 		GlStateManager.tryBlendFuncSeparate(RealOpenGLEnums.GL_SRC_ALPHA, RealOpenGLEnums.GL_ONE_MINUS_SRC_ALPHA,
 				RealOpenGLEnums.GL_ONE, RealOpenGLEnums.GL_ZERO);
@@ -625,7 +646,7 @@ public class GuiMainMenu extends GuiScreen {
 		GlStateManager.popMatrix();
 
 		GlStateManager.pushMatrix();
-		GlStateManager.translate((float) (this.width / 2), (float) (top + 40), 0.0F);
+		GlStateManager.translate((float) (this.width / 2), (float) (top + (int) (9.0F * ts) + 4), 0.0F);
 		GlStateManager.scale(1.5F, 1.5F, 1.0F);
 		this.fontRendererObj.drawString("CLIENT", (float) (-this.fontRendererObj.getStringWidth("CLIENT") / 2), 0.0F,
 				0xFFDDEFFF, true);
