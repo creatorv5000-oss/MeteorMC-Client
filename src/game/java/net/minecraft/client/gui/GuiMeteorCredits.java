@@ -18,8 +18,8 @@ public class GuiMeteorCredits extends GuiScreen {
 	// ===================== EDIT THE CREDITS HERE =====================
 	private static final String[] CREDITS = {
 			"#MeteorMC Client",
-			"Created by creatorv5000-oss",
-			"Client base by isacofff",
+			"Created by none Client Owner",
+			"Pinkys-Client Founder/Dev",
 			"",
 			"#Eaglercraft",
 			"EaglercraftX by lax1dude and contributors",
