@@ -11,6 +11,8 @@ import java.util.Map;
 import net.lax1dude.eaglercraft.opengl.GlStateManager;
 import net.lax1dude.eaglercraft.opengl.RealOpenGLEnums;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.audio.PositionedSoundRecord;
+import net.minecraft.init.SoundEvents;
 import net.minecraft.client.renderer.RenderHelper;
 import net.minecraft.client.renderer.RenderItem;
 import net.minecraft.client.resources.I18n;
@@ -1193,6 +1195,14 @@ final class MeteorModuleManager {
 		register(new CombatTimer());
 		register(new CritIndicator());
 		register(new AttackCooldown());
+		register(new HitSound());
+		register(new CritSound());
+		register(new KillSound());
+		register(new ComboSound());
+		register(new CooldownSound());
+		register(new LowHealthSound());
+		register(new ArmorAlertSound());
+		register(new PotionExpirySound());
 
 		// Movement
 		register(new ToggleSprint());
@@ -1328,6 +1338,37 @@ final class MeteorModuleManager {
 		Minecraft m = Minecraft.getMinecraft();
 		if (!bulk && m != null && m.world != null && m.renderGlobal != null) {
 			m.renderGlobal.loadRenderers();
+		}
+	}
+
+	/** Plays one of six built-in feedback sounds on your client only. */
+	private static void playFx(int which, float pitch) {
+		Minecraft m = Minecraft.getMinecraft();
+		if (m == null) {
+			return;
+		}
+		switch (which) {
+		case 1:
+			m.getSoundHandler().playSound(PositionedSoundRecord.getMasterRecord(SoundEvents.BLOCK_NOTE_PLING, pitch));
+			break;
+		case 2:
+			m.getSoundHandler()
+					.playSound(PositionedSoundRecord.getMasterRecord(SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP, pitch));
+			break;
+		case 3:
+			m.getSoundHandler()
+					.playSound(PositionedSoundRecord.getMasterRecord(SoundEvents.ENTITY_ARROW_HIT_PLAYER, pitch));
+			break;
+		case 4:
+			m.getSoundHandler().playSound(PositionedSoundRecord.getMasterRecord(SoundEvents.ENTITY_PLAYER_LEVELUP, pitch));
+			break;
+		case 5:
+			m.getSoundHandler().playSound(PositionedSoundRecord.getMasterRecord(SoundEvents.BLOCK_NOTE_HAT, pitch));
+			break;
+		default:
+			m.getSoundHandler()
+					.playSound(PositionedSoundRecord.getMasterRecord(SoundEvents.ENTITY_PLAYER_ATTACK_CRIT, pitch));
+			break;
 		}
 	}
 
@@ -2340,6 +2381,224 @@ final class MeteorModuleManager {
 
 		int color(Minecraft m) {
 			return m.player != null && m.player.getCooledAttackStrength(0.0F) >= 1.0F ? 0xFF55FF55 : HUD_COLOR;
+		}
+	}
+
+
+	// ------------------------- Combat feedback sounds (client side only, no HUD) -------------------------
+
+	/**
+	 * Base for the sound mods. Each has a Sound option (1 Pling, 2 XP orb, 3 Ding, 4 Level up, 5 Tick,
+	 * 6 Crit) and a Pitch option. "Hit" means you pressed attack while aiming at something.
+	 */
+	private static abstract class SoundMod extends MeteorModule {
+		final MeteorSetting sound;
+		final MeteorSetting pitch;
+		private boolean lastDown;
+
+		SoundMod(String name, String description, int defaultSound) {
+			super(name, description, Category.COMBAT);
+			this.sound = addSetting(MeteorSetting.number("Sound", defaultSound, 1.0D, 6.0D, 1.0D));
+			this.pitch = addSetting(MeteorSetting.number("Pitch", 1.0D, 0.5D, 2.0D, 0.1D));
+		}
+
+		void beep() {
+			playFx((int) sound.getDouble(), pitch.getFloat());
+		}
+
+		/** True on the frame you press attack while aiming at something. */
+		boolean hitClick(Minecraft m) {
+			boolean down = m.gameSettings.keyBindAttack.isKeyDown();
+			boolean hit = down && !lastDown && m.pointedEntity != null;
+			lastDown = down;
+			return hit;
+		}
+	}
+
+	/** A sound every time you click on a target. */
+	private static class HitSound extends SoundMod {
+		HitSound() {
+			super("Hit Sound", "Plays a sound when you hit a target.", 2);
+		}
+
+		public void onRender() {
+			if (hitClick(mc())) {
+				beep();
+			}
+		}
+	}
+
+	/** A different sound when the hit would be a critical. */
+	private static class CritSound extends SoundMod {
+		CritSound() {
+			super("Crit Sound", "Plays a sound on critical hits.", 6);
+		}
+
+		public void onRender() {
+			Minecraft m = mc();
+			if (m.player == null) {
+				return;
+			}
+			boolean crit = m.player.fallDistance > 0.0F && !m.player.onGround && !m.player.isInWater()
+					&& !m.player.isSprinting() && m.player.getCooledAttackStrength(0.0F) > 0.9F;
+			if (hitClick(m) && crit) {
+				beep();
+			}
+		}
+	}
+
+	/** A sound when the last target you hit dies. */
+	private static class KillSound extends SoundMod {
+		private EntityLivingBase lastTarget;
+		private long lastHit;
+
+		KillSound() {
+			super("Kill Sound", "Plays a sound when your target dies.", 4);
+		}
+
+		protected void onDisable() {
+			lastTarget = null;
+		}
+
+		public void onRender() {
+			Minecraft m = mc();
+			long now = Minecraft.getSystemTime();
+			if (hitClick(m) && m.pointedEntity instanceof EntityLivingBase) {
+				lastTarget = (EntityLivingBase) m.pointedEntity;
+				lastHit = now;
+			}
+			if (lastTarget != null) {
+				if (now - lastHit > 5000L) {
+					lastTarget = null;
+				} else if (lastTarget.getHealth() <= 0.0F || lastTarget.isDead) {
+					beep();
+					lastTarget = null;
+				}
+			}
+		}
+	}
+
+	/** A sound every few hits in a row. */
+	private static class ComboSound extends SoundMod {
+		private final MeteorSetting every = addSetting(MeteorSetting.number("Every Hits", 5.0D, 2.0D, 10.0D, 1.0D));
+		private int combo;
+		private long lastHit;
+
+		ComboSound() {
+			super("Combo Sound", "Plays a sound every few hits in a row.", 1);
+		}
+
+		protected void onEnable() {
+			combo = 0;
+		}
+
+		public void onRender() {
+			long now = Minecraft.getSystemTime();
+			if (combo > 0 && now - lastHit > 3000L) {
+				combo = 0;
+			}
+			if (hitClick(mc())) {
+				combo++;
+				lastHit = now;
+				if (combo % (int) every.getDouble() == 0) {
+					beep();
+				}
+			}
+		}
+	}
+
+	/** A quiet tick when your weapon is ready to swing again. */
+	private static class CooldownSound extends SoundMod {
+		private float prev = 1.0F;
+
+		CooldownSound() {
+			super("Cooldown Sound", "Ticks when your weapon is fully charged.", 5);
+		}
+
+		public void onRender() {
+			Minecraft m = mc();
+			if (m.player == null) {
+				return;
+			}
+			float now = m.player.getCooledAttackStrength(0.0F);
+			if (prev < 1.0F && now >= 1.0F) {
+				beep();
+			}
+			prev = now;
+		}
+	}
+
+	/** A repeating beep while your health is low. */
+	private static class LowHealthSound extends SoundMod {
+		private final MeteorSetting hearts = addSetting(MeteorSetting.number("Hearts", 3.0D, 1.0D, 8.0D, 0.5D));
+		private long lastBeep;
+
+		LowHealthSound() {
+			super("Low Health Sound", "Beeps while your health is low.", 1);
+		}
+
+		public void onRender() {
+			Minecraft m = mc();
+			long now = Minecraft.getSystemTime();
+			if (m.player != null && m.player.getHealth() <= hearts.getFloat() * 2.0F && now - lastBeep >= 1500L) {
+				lastBeep = now;
+				beep();
+			}
+		}
+	}
+
+	/** A beep when a piece of armor is close to breaking. */
+	private static class ArmorAlertSound extends SoundMod {
+		private final MeteorSetting percent = addSetting(MeteorSetting.number("Percent", 15.0D, 5.0D, 50.0D, 5.0D));
+		private long lastBeep;
+
+		ArmorAlertSound() {
+			super("Armor Alert Sound", "Beeps when armor is nearly broken.", 5);
+		}
+
+		public void onRender() {
+			Minecraft m = mc();
+			long now = Minecraft.getSystemTime();
+			if (m.player == null || now - lastBeep < 3000L) {
+				return;
+			}
+			for (int slot = 0; slot < 4; ++slot) {
+				ItemStack stack = m.player.inventory.armorItemInSlot(slot);
+				if (!stack.func_190926_b() && stack.isItemStackDamageable()) {
+					int max = stack.getMaxDamage();
+					int left = max - stack.getItemDamage();
+					if (max > 0 && left * 100 < max * percent.getDouble()) {
+						lastBeep = now;
+						beep();
+						return;
+					}
+				}
+			}
+		}
+	}
+
+	/** A sound when one of your potion effects runs out. */
+	private static class PotionExpirySound extends SoundMod {
+		private int lastCount = -1;
+
+		PotionExpirySound() {
+			super("Potion Expiry Sound", "Plays a sound when an effect ends.", 3);
+		}
+
+		protected void onEnable() {
+			lastCount = -1;
+		}
+
+		public void onRender() {
+			Minecraft m = mc();
+			if (m.player == null) {
+				return;
+			}
+			int count = m.player.getActivePotionEffects().size();
+			if (lastCount >= 0 && count < lastCount) {
+				beep();
+			}
+			lastCount = count;
 		}
 	}
 
