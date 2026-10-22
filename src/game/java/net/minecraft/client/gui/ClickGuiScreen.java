@@ -11,8 +11,6 @@ import java.util.Map;
 import net.lax1dude.eaglercraft.opengl.GlStateManager;
 import net.lax1dude.eaglercraft.opengl.RealOpenGLEnums;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.audio.PositionedSoundRecord;
-import net.minecraft.init.SoundEvents;
 import net.minecraft.client.renderer.RenderHelper;
 import net.minecraft.client.renderer.RenderItem;
 import net.minecraft.client.resources.I18n;
@@ -1146,6 +1144,7 @@ final class MeteorModuleManager {
 	private static final int HUD_COLOR = 0xFFFFD83A;
 	private static int hudY = 4;
 	private static FpsBoost fpsBoost;
+	private static CustomCrosshair crosshair;
 	private static boolean boostStarted;
 	private static boolean bulk;
 
@@ -1195,14 +1194,8 @@ final class MeteorModuleManager {
 		register(new CombatTimer());
 		register(new CritIndicator());
 		register(new AttackCooldown());
-		register(new HitSound());
-		register(new CritSound());
-		register(new KillSound());
-		register(new ComboSound());
-		register(new CooldownSound());
-		register(new LowHealthSound());
-		register(new ArmorAlertSound());
-		register(new PotionExpirySound());
+		crosshair = new CustomCrosshair();
+		register(crosshair);
 
 		// Movement
 		register(new ToggleSprint());
@@ -1212,6 +1205,8 @@ final class MeteorModuleManager {
 		register(new FallDistance());
 
 		// Visual
+		register(new FovChanger());
+		register(new NoBobbing());
 		register(new Zoom());
 		register(new NoRain());
 		register(new TimeChanger());
@@ -1270,6 +1265,11 @@ final class MeteorModuleManager {
 			int a = 150 + (i % 4) * 28;
 			Gui.drawRect(x, y, x + size, y + size, (a << 24) | 0xFFFFFF);
 		}
+	}
+
+	/** Read by GuiIngame: true while the Custom Crosshair replaces the vanilla crosshair. */
+	static boolean hideVanillaCrosshair() {
+		return crosshair != null && crosshair.isEnabled();
 	}
 
 	/** Menu Effects options, shown on the ClickGUI Settings page. */
@@ -1338,37 +1338,6 @@ final class MeteorModuleManager {
 		Minecraft m = Minecraft.getMinecraft();
 		if (!bulk && m != null && m.world != null && m.renderGlobal != null) {
 			m.renderGlobal.loadRenderers();
-		}
-	}
-
-	/** Plays one of six built-in feedback sounds on your client only. */
-	private static void playFx(int which, float pitch) {
-		Minecraft m = Minecraft.getMinecraft();
-		if (m == null) {
-			return;
-		}
-		switch (which) {
-		case 1:
-			m.getSoundHandler().playSound(PositionedSoundRecord.getMasterRecord(SoundEvents.BLOCK_NOTE_PLING, pitch));
-			break;
-		case 2:
-			m.getSoundHandler()
-					.playSound(PositionedSoundRecord.getMasterRecord(SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP, pitch));
-			break;
-		case 3:
-			m.getSoundHandler()
-					.playSound(PositionedSoundRecord.getMasterRecord(SoundEvents.ENTITY_ARROW_HIT_PLAYER, pitch));
-			break;
-		case 4:
-			m.getSoundHandler().playSound(PositionedSoundRecord.getMasterRecord(SoundEvents.ENTITY_PLAYER_LEVELUP, pitch));
-			break;
-		case 5:
-			m.getSoundHandler().playSound(PositionedSoundRecord.getMasterRecord(SoundEvents.BLOCK_NOTE_HAT, pitch));
-			break;
-		default:
-			m.getSoundHandler()
-					.playSound(PositionedSoundRecord.getMasterRecord(SoundEvents.ENTITY_PLAYER_ATTACK_CRIT, pitch));
-			break;
 		}
 	}
 
@@ -1609,6 +1578,48 @@ final class MeteorModuleManager {
 
 		MenuEffects() {
 			super("Menu Effects", "Sparkles, shooting stars and snow on menus.", Category.VISUAL);
+		}
+	}
+
+
+	/** A fixed field of view of your choice (pros often play at 90 to 110). */
+	private static class FovChanger extends MeteorModule {
+		private final MeteorSetting fov = addSetting(MeteorSetting.number("FOV", 90.0D, 30.0D, 110.0D, 1.0D));
+		private float saved = 70.0F;
+
+		FovChanger() {
+			super("FOV Changer", "Sets your field of view.", Category.VISUAL);
+		}
+
+		protected void onEnable() {
+			saved = mc().gameSettings.fovSetting;
+			mc().gameSettings.fovSetting = fov.getFloat();
+		}
+
+		protected void onDisable() {
+			mc().gameSettings.fovSetting = saved;
+		}
+
+		public void onRender() {
+			mc().gameSettings.fovSetting = fov.getFloat();
+		}
+	}
+
+	/** Stops the camera swaying while you walk (a common PvP tweak). */
+	private static class NoBobbing extends MeteorModule {
+		private boolean saved = true;
+
+		NoBobbing() {
+			super("No View Bobbing", "Stops the camera swaying as you move.", Category.VISUAL);
+		}
+
+		protected void onEnable() {
+			saved = mc().gameSettings.viewBobbing;
+			mc().gameSettings.viewBobbing = false;
+		}
+
+		protected void onDisable() {
+			mc().gameSettings.viewBobbing = saved;
 		}
 	}
 
@@ -2385,220 +2396,59 @@ final class MeteorModuleManager {
 	}
 
 
-	// ------------------------- Combat feedback sounds (client side only, no HUD) -------------------------
-
 	/**
-	 * Base for the sound mods. Each has a Sound option (1 Pling, 2 XP orb, 3 Ding, 4 Level up, 5 Tick,
-	 * 6 Crit) and a Pitch option. "Hit" means you pressed attack while aiming at something.
+	 * Your own crosshair. Style: 1 cross, 2 dot, 3 cross with dot. Color: 1 white, 2 red, 3 green,
+	 * 4 cyan, 5 yellow, 6 pink. Turns red while you aim at something if "Target Color" is on.
 	 */
-	private static abstract class SoundMod extends MeteorModule {
-		final MeteorSetting sound;
-		final MeteorSetting pitch;
-		private boolean lastDown;
+	private static class CustomCrosshair extends MeteorModule {
+		private static final int[] COLORS = { 0xFFFFFFFF, 0xFFFF4040, 0xFF55FF55, 0xFF40E0FF, 0xFFFFE040, 0xFFFF70D0 };
+		private final MeteorSetting style = addSetting(MeteorSetting.number("Style", 1.0D, 1.0D, 3.0D, 1.0D));
+		private final MeteorSetting size = addSetting(MeteorSetting.number("Size", 5.0D, 1.0D, 12.0D, 1.0D));
+		private final MeteorSetting gap = addSetting(MeteorSetting.number("Gap", 2.0D, 0.0D, 8.0D, 1.0D));
+		private final MeteorSetting thickness = addSetting(MeteorSetting.number("Thickness", 1.0D, 1.0D, 3.0D, 1.0D));
+		private final MeteorSetting color = addSetting(MeteorSetting.number("Color", 1.0D, 1.0D, 6.0D, 1.0D));
+		private final MeteorSetting outline = addSetting(MeteorSetting.bool("Outline", true));
+		private final MeteorSetting targetColor = addSetting(MeteorSetting.bool("Target Color", true));
 
-		SoundMod(String name, String description, int defaultSound) {
-			super(name, description, Category.COMBAT);
-			this.sound = addSetting(MeteorSetting.number("Sound", defaultSound, 1.0D, 6.0D, 1.0D));
-			this.pitch = addSetting(MeteorSetting.number("Pitch", 1.0D, 0.5D, 2.0D, 0.1D));
-		}
-
-		void beep() {
-			playFx((int) sound.getDouble(), pitch.getFloat());
-		}
-
-		/** True on the frame you press attack while aiming at something. */
-		boolean hitClick(Minecraft m) {
-			boolean down = m.gameSettings.keyBindAttack.isKeyDown();
-			boolean hit = down && !lastDown && m.pointedEntity != null;
-			lastDown = down;
-			return hit;
-		}
-	}
-
-	/** A sound every time you click on a target. */
-	private static class HitSound extends SoundMod {
-		HitSound() {
-			super("Hit Sound", "Plays a sound when you hit a target.", 2);
-		}
-
-		public void onRender() {
-			if (hitClick(mc())) {
-				beep();
-			}
-		}
-	}
-
-	/** A different sound when the hit would be a critical. */
-	private static class CritSound extends SoundMod {
-		CritSound() {
-			super("Crit Sound", "Plays a sound on critical hits.", 6);
+		CustomCrosshair() {
+			super("Custom Crosshair", "Your own crosshair style, size and color.", Category.COMBAT);
 		}
 
 		public void onRender() {
 			Minecraft m = mc();
-			if (m.player == null) {
+			if (m.gameSettings.thirdPersonView != 0 || m.scaledResolution == null) {
 				return;
 			}
-			boolean crit = m.player.fallDistance > 0.0F && !m.player.onGround && !m.player.isInWater()
-					&& !m.player.isSprinting() && m.player.getCooledAttackStrength(0.0F) > 0.9F;
-			if (hitClick(m) && crit) {
-				beep();
+			int cx = m.scaledResolution.getScaledWidth() / 2;
+			int cy = m.scaledResolution.getScaledHeight() / 2;
+			int st = (int) style.getDouble();
+			int sz = (int) size.getDouble();
+			int g = (int) gap.getDouble();
+			int t = (int) thickness.getDouble();
+			int idx = Math.max(1, Math.min(COLORS.length, (int) color.getDouble())) - 1;
+			int col = (targetColor.getBoolean() && m.pointedEntity != null) ? 0xFFFF2020 : COLORS[idx];
+			int half = t / 2;
+
+			int[][] r = new int[5][];
+			int n = 0;
+			if (st == 1 || st == 3) {
+				r[n++] = new int[] { cx - half, cy - half - g - sz, cx - half + t, cy - half - g };
+				r[n++] = new int[] { cx - half, cy - half + t + g, cx - half + t, cy - half + t + g + sz };
+				r[n++] = new int[] { cx - half - g - sz, cy - half, cx - half - g, cy - half + t };
+				r[n++] = new int[] { cx - half + t + g, cy - half, cx - half + t + g + sz, cy - half + t };
 			}
-		}
-	}
-
-	/** A sound when the last target you hit dies. */
-	private static class KillSound extends SoundMod {
-		private EntityLivingBase lastTarget;
-		private long lastHit;
-
-		KillSound() {
-			super("Kill Sound", "Plays a sound when your target dies.", 4);
-		}
-
-		protected void onDisable() {
-			lastTarget = null;
-		}
-
-		public void onRender() {
-			Minecraft m = mc();
-			long now = Minecraft.getSystemTime();
-			if (hitClick(m) && m.pointedEntity instanceof EntityLivingBase) {
-				lastTarget = (EntityLivingBase) m.pointedEntity;
-				lastHit = now;
+			if (st == 2 || st == 3) {
+				int d = Math.max(2, t);
+				r[n++] = new int[] { cx - d / 2, cy - d / 2, cx - d / 2 + d, cy - d / 2 + d };
 			}
-			if (lastTarget != null) {
-				if (now - lastHit > 5000L) {
-					lastTarget = null;
-				} else if (lastTarget.getHealth() <= 0.0F || lastTarget.isDead) {
-					beep();
-					lastTarget = null;
+			if (outline.getBoolean()) {
+				for (int i = 0; i < n; ++i) {
+					Gui.drawRect(r[i][0] - 1, r[i][1] - 1, r[i][2] + 1, r[i][3] + 1, 0xC0000000);
 				}
 			}
-		}
-	}
-
-	/** A sound every few hits in a row. */
-	private static class ComboSound extends SoundMod {
-		private final MeteorSetting every = addSetting(MeteorSetting.number("Every Hits", 5.0D, 2.0D, 10.0D, 1.0D));
-		private int combo;
-		private long lastHit;
-
-		ComboSound() {
-			super("Combo Sound", "Plays a sound every few hits in a row.", 1);
-		}
-
-		protected void onEnable() {
-			combo = 0;
-		}
-
-		public void onRender() {
-			long now = Minecraft.getSystemTime();
-			if (combo > 0 && now - lastHit > 3000L) {
-				combo = 0;
+			for (int i = 0; i < n; ++i) {
+				Gui.drawRect(r[i][0], r[i][1], r[i][2], r[i][3], col);
 			}
-			if (hitClick(mc())) {
-				combo++;
-				lastHit = now;
-				if (combo % (int) every.getDouble() == 0) {
-					beep();
-				}
-			}
-		}
-	}
-
-	/** A quiet tick when your weapon is ready to swing again. */
-	private static class CooldownSound extends SoundMod {
-		private float prev = 1.0F;
-
-		CooldownSound() {
-			super("Cooldown Sound", "Ticks when your weapon is fully charged.", 5);
-		}
-
-		public void onRender() {
-			Minecraft m = mc();
-			if (m.player == null) {
-				return;
-			}
-			float now = m.player.getCooledAttackStrength(0.0F);
-			if (prev < 1.0F && now >= 1.0F) {
-				beep();
-			}
-			prev = now;
-		}
-	}
-
-	/** A repeating beep while your health is low. */
-	private static class LowHealthSound extends SoundMod {
-		private final MeteorSetting hearts = addSetting(MeteorSetting.number("Hearts", 3.0D, 1.0D, 8.0D, 0.5D));
-		private long lastBeep;
-
-		LowHealthSound() {
-			super("Low Health Sound", "Beeps while your health is low.", 1);
-		}
-
-		public void onRender() {
-			Minecraft m = mc();
-			long now = Minecraft.getSystemTime();
-			if (m.player != null && m.player.getHealth() <= hearts.getFloat() * 2.0F && now - lastBeep >= 1500L) {
-				lastBeep = now;
-				beep();
-			}
-		}
-	}
-
-	/** A beep when a piece of armor is close to breaking. */
-	private static class ArmorAlertSound extends SoundMod {
-		private final MeteorSetting percent = addSetting(MeteorSetting.number("Percent", 15.0D, 5.0D, 50.0D, 5.0D));
-		private long lastBeep;
-
-		ArmorAlertSound() {
-			super("Armor Alert Sound", "Beeps when armor is nearly broken.", 5);
-		}
-
-		public void onRender() {
-			Minecraft m = mc();
-			long now = Minecraft.getSystemTime();
-			if (m.player == null || now - lastBeep < 3000L) {
-				return;
-			}
-			for (int slot = 0; slot < 4; ++slot) {
-				ItemStack stack = m.player.inventory.armorItemInSlot(slot);
-				if (!stack.func_190926_b() && stack.isItemStackDamageable()) {
-					int max = stack.getMaxDamage();
-					int left = max - stack.getItemDamage();
-					if (max > 0 && left * 100 < max * percent.getDouble()) {
-						lastBeep = now;
-						beep();
-						return;
-					}
-				}
-			}
-		}
-	}
-
-	/** A sound when one of your potion effects runs out. */
-	private static class PotionExpirySound extends SoundMod {
-		private int lastCount = -1;
-
-		PotionExpirySound() {
-			super("Potion Expiry Sound", "Plays a sound when an effect ends.", 3);
-		}
-
-		protected void onEnable() {
-			lastCount = -1;
-		}
-
-		public void onRender() {
-			Minecraft m = mc();
-			if (m.player == null) {
-				return;
-			}
-			int count = m.player.getActivePotionEffects().size();
-			if (lastCount >= 0 && count < lastCount) {
-				beep();
-			}
-			lastCount = count;
 		}
 	}
 
