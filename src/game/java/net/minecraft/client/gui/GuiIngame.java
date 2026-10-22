@@ -391,7 +391,9 @@ public class GuiIngame extends Gui {
 				GlStateManager.tryBlendFuncSeparate(RealOpenGLEnums.GL_ONE_MINUS_DST_COLOR,
 						RealOpenGLEnums.GL_ONE_MINUS_SRC_COLOR, RealOpenGLEnums.GL_ONE, RealOpenGLEnums.GL_ZERO);
 				GlStateManager.enableAlpha();
-				this.drawTexturedModalRect(l / 2 - 7, i1 / 2 - 7, 0, 0, 16, 16);
+				if (!MeteorModuleManager.hideVanillaCrosshair()) {
+					this.drawTexturedModalRect(l / 2 - 7, i1 / 2 - 7, 0, 0, 16, 16);
+				}
 
 				if (this.mc.gameSettings.attackIndicator == 1) {
 					float f = this.mc.player.getCooledAttackStrength(0.0F);
