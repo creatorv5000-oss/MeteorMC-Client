@@ -1,5 +1,6 @@
 package net.minecraft.client.renderer;
 
+import net.minecraft.client.gui.MeteorHooks;
 import com.google.common.base.MoreObjects;
 import java.util.Objects;
 
@@ -342,6 +343,7 @@ public class ItemRenderer {
 		boolean flag = p_187457_4_ == EnumHand.MAIN_HAND;
 		EnumHandSide enumhandside = flag ? p_187457_1_.getPrimaryHand() : p_187457_1_.getPrimaryHand().opposite();
 		GlStateManager.pushMatrix();
+		MeteorHooks.applyHandOffset(flag);
 
 		if (p_187457_6_.func_190926_b()) {
 			if (flag && !p_187457_1_.isInvisible()) {
@@ -411,6 +413,7 @@ public class ItemRenderer {
 				this.transformFirstPerson(enumhandside, p_187457_5_);
 			}
 
+			MeteorHooks.applyItemScale(flag);
 			this.renderItemSide(p_187457_1_, p_187457_6_,
 					flag1 ? ItemCameraTransforms.TransformType.FIRST_PERSON_RIGHT_HAND
 							: ItemCameraTransforms.TransformType.FIRST_PERSON_LEFT_HAND,
@@ -552,7 +555,7 @@ public class ItemRenderer {
 			float f7 = -0.5F;
 			float f8 = 0.5F;
 			float f9 = -0.5F;
-			GlStateManager.translate((float) (-(i * 2 - 1)) * 0.24F, -0.3F, 0.0F);
+			GlStateManager.translate((float) (-(i * 2 - 1)) * 0.24F, -0.3F - MeteorHooks.fireOffset(), 0.0F);
 			GlStateManager.rotate((float) (i * 2 - 1) * 10.0F, 0.0F, 1.0F, 0.0F);
 			bufferbuilder.begin(7, DefaultVertexFormats.POSITION_TEX);
 			bufferbuilder.pos(-0.5D, -0.5D, -0.5D).tex((double) f2, (double) f4).endVertex();
@@ -581,6 +584,9 @@ public class ItemRenderer {
 			this.equippedProgressOffHand = MathHelper.clamp(this.equippedProgressOffHand - 0.4F, 0.0F, 1.0F);
 		} else {
 			float f = entityplayersp.getCooledAttackStrength(1.0F);
+		if (MeteorHooks.fixedHand()) {
+			f = 1.0F;
+		}
 			this.equippedProgressMainHand += MathHelper
 					.clamp((Objects.equals(this.itemStackMainHand, itemstack) ? f * f * f : 0.0F)
 							- this.equippedProgressMainHand, -0.4F, 0.4F);
