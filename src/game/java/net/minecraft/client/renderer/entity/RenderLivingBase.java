@@ -1,5 +1,6 @@
 package net.minecraft.client.renderer.entity;
 
+import net.minecraft.client.gui.MeteorHooks;
 import com.google.common.collect.Lists;
 import java.util.List;
 
@@ -256,7 +257,8 @@ public abstract class RenderLivingBase<T extends EntityLivingBase> extends Rende
 			float f3 = (float) (i >>> 8 & 255) / 255.0F;
 			float f4 = (float) (i & 255) / 255.0F;
 			GlStateManager.setShaderBlendSrc(f1, f1, f1, 1.0F);
-			GlStateManager.setShaderBlendAdd(f2 * f1 + 0.4F, f3 * f1, f4 * f1, 0.0f);
+			GlStateManager.setShaderBlendAdd(f2 * f1 + MeteorHooks.hitRed(), f3 * f1 + MeteorHooks.hitGreen(),
+					f4 * f1 + MeteorHooks.hitBlue(), 0.0f);
 			return true;
 		}
 	}
