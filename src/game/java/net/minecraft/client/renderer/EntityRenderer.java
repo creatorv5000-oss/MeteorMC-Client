@@ -1,5 +1,6 @@
 package net.minecraft.client.renderer;
 
+import net.minecraft.client.gui.MeteorHooks;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import java.util.List;
@@ -385,7 +386,9 @@ public class EntityRenderer implements IResourceManagerReloadListener {
 
 			if (useFOVSetting) {
 				f = this.mc.gameSettings.fovSetting;
-				f = f * (this.fovModifierHandPrev + (this.fovModifierHand - this.fovModifierHandPrev) * partialTicks);
+				if (!MeteorHooks.staticFov()) {
+					f = f * (this.fovModifierHandPrev + (this.fovModifierHand - this.fovModifierHandPrev) * partialTicks);
+				}
 			}
 
 			if (entity instanceof EntityLivingBase && ((EntityLivingBase) entity).getHealth() <= 0.0F) {
@@ -422,7 +425,7 @@ public class EntityRenderer implements IResourceManagerReloadListener {
 			f = MathHelper.sin(f * f * f * f * (float) Math.PI);
 			float f2 = entitylivingbase.attackedAtYaw;
 			GlStateManager.rotate(-f2, 0.0F, 1.0F, 0.0F);
-			GlStateManager.rotate(-f * 14.0F, 0.0F, 0.0F, 1.0F);
+			GlStateManager.rotate(-f * 14.0F * MeteorHooks.hurtCamScale(), 0.0F, 0.0F, 1.0F);
 			GlStateManager.rotate(f2, 0.0F, 1.0F, 0.0F);
 		}
 	}
