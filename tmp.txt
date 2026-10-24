@@ -1,0 +1,3 @@
+/*
+ * NOTE: This file is patched in-place for the repository.
+ */
